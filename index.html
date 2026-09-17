@@ -436,6 +436,112 @@
   .field:focus-within label { color: var(--label); }
   .field input { flex: 1; min-width: 0; font-size: 15px; }
 
+  /* ============ 芯片式选择（分类 / 支付方式） ============ */
+  /* 芯片块：标题 + 可横向滚动的选项行，替代原来的自由输入框。
+     常用项一下点中，冷门项走行尾的「自定义」入口，两边都不耽误。 */
+  .chip-block { padding: 10px 0 2px; }
+  .chip-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; margin-bottom: 8px;
+  }
+  .chip-head > span { font-size: 13px; color: var(--label-2); }
+  /* 行尾的「自定义」文字按钮，选中的值不在预设里时会自动亮起 */
+  .chip-custom-btn {
+    background: none; border: none; padding: 2px 0;
+    font-size: 13px; color: var(--accent);
+  }
+  .chip-custom-btn:active { opacity: .55; }
+
+  /* 滚动的芯片行。负 margin 让芯片能贴到抽屉边缘，滚动时不显得被裁 */
+  .chips {
+    display: flex; gap: 8px;
+    overflow-x: auto; overflow-y: hidden;
+    padding: 2px 16px 8px;
+    margin: 0 -18px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+
+  .chip {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 34px; padding: 0 14px;
+    border: none; border-radius: 999px;
+    background: var(--card);
+    color: var(--label);
+    font-size: 14px; font-weight: 500;
+    white-space: nowrap;
+    box-shadow: 0 0 0 .5px var(--sep);
+    transition: transform .12s ease, background .15s, color .15s;
+  }
+  .chip:active { transform: scale(.95); }
+  /* 选中态：用当前模式的强调色（支出蓝 / 收入绿）填充 */
+  .chip.on {
+    background: var(--accent); color: #fff;
+    box-shadow: none; font-weight: 600;
+  }
+  /* 芯片里的小圆点：沿用分类图标的颜色，未选中时提示分类归属 */
+  .chip .dot-c {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor; opacity: .85; flex-shrink: 0;
+  }
+  .chip.on .dot-c { background: #fff; opacity: 1; }
+
+  /* 自定义输入行：默认不出现在布局里，点「自定义」才展开 */
+  .chip-custom {
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 16px 8px;
+    background: var(--card);
+    border-radius: 999px;
+    padding: 0 14px; height: 36px;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .chip-custom input { flex: 1; min-width: 0; font-size: 14px; }
+  .chip-custom button {
+    background: none; border: none; color: var(--accent);
+    font-size: 14px; font-weight: 600; padding: 4px 0;
+  }
+
+  /* ============ 数据不完整警示条 ============ */
+  .warn-bar {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: rgba(255, 149, 0, .12);
+    color: #B25E00;
+    border-radius: 14px;
+    padding: 10px 14px;
+    font-size: 13px; line-height: 1.45;
+    margin-bottom: 12px;
+  }
+  @media (prefers-color-scheme: dark) { .warn-bar { color: #FFB340; } }
+  .warn-bar svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1.5px; }
+
+  /* ============ 日期快捷按钮 ============ */
+  .date-quick { display: flex; gap: 6px; flex-shrink: 0; }
+  .date-quick button {
+    height: 28px; padding: 0 10px;
+    border: none; border-radius: 999px;
+    background: var(--card); color: var(--accent);
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 0 0 .5px var(--sep);
+  }
+  .date-quick button:active { opacity: .6; }
+
+  /* 选中记录详情（删除确认用） */
+  .as-detail {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 .5px 0 var(--sep);
+  }
+  .as-detail .ad-ic {
+    width: 34px; height: 34px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .as-detail .ad-ic svg { width: 18px; height: 18px; }
+  .as-detail .ad-t { font-size: 15px; font-weight: 600; }
+  .as-detail .ad-s { font-size: 13px; color: var(--label-2); margin-top: 1px; }
+
   .btn {
     display: flex; align-items: center; justify-content: center;
     width: 100%; height: 50px;
@@ -573,7 +679,7 @@
   <div id="viewList">
     <section class="hero">
       <div class="hero-label">本月支出</div>
-      <div class="hero-amount" id="total">¥ --</div>
+      <div class="hero-amount" id="total" aria-live="polite">¥ --</div>
       <div class="hero-sub">收入 <b id="statIncome">--</b> · 本月 <b id="statCount">--</b></div>
     </section>
 
@@ -585,6 +691,11 @@
   </div>
 
   <div id="viewStats" hidden>
+    <div class="warn-bar" id="truncWarn" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div id="truncWarnText"></div>
+    </div>
+
     <div class="month-nav">
       <button class="m-btn" id="mPrev" aria-label="上个月" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -675,21 +786,46 @@
 
     <div class="fields">
       <div class="field">
-        <label for="fCategory">分类</label>
-        <input id="fCategory" placeholder="如 餐饮 / 交通 / 购物">
-      </div>
-      <div class="field">
         <label for="fTime">时间</label>
         <input id="fTime" type="datetime-local">
+        <div class="date-quick">
+          <button type="button" id="qToday">今天</button>
+          <button type="button" id="qYesterday">昨天</button>
+        </div>
       </div>
       <div class="field">
         <label for="fNote">备注</label>
-        <input id="fNote" placeholder="选填">
+        <input id="fNote" placeholder="选填，如 沙县小吃">
       </div>
-      <div class="field">
-        <label for="fAccount" id="accountLabel">支付方式</label>
-        <input id="fAccount" placeholder="如 微信 / 支付宝">
+    </div>
+
+    <!-- 分类：芯片式。常用项点一下选中，冷门项走「自定义」 -->
+    <div class="chip-block" id="catBlock">
+      <div class="chip-head">
+        <span id="catLabel">分类</span>
+        <button class="chip-custom-btn" id="catCustomBtn" type="button">自定义…</button>
       </div>
+      <div class="chips" id="catChips"></div>
+      <div class="chip-custom" id="catCustom" hidden>
+        <input id="catCustomInput" placeholder="输入自定义分类" maxlength="10">
+        <button type="button" id="catCustomOk">确定</button>
+      </div>
+      <!-- 真实值存这里，提交时读它，跟原来的 fCategory 语义一致 -->
+      <input type="hidden" id="fCategory">
+    </div>
+
+    <!-- 支付方式：芯片式。收入模式下标题变「到账方式」 -->
+    <div class="chip-block" id="acctBlock">
+      <div class="chip-head">
+        <span id="accountLabel">支付方式</span>
+        <button class="chip-custom-btn" id="acctCustomBtn" type="button">自定义…</button>
+      </div>
+      <div class="chips" id="acctChips"></div>
+      <div class="chip-custom" id="acctCustom" hidden>
+        <input id="acctCustomInput" placeholder="输入自定义方式" maxlength="10">
+        <button type="button" id="acctCustomOk">确定</button>
+      </div>
+      <input type="hidden" id="fAccount">
     </div>
 
     <button class="btn btn-primary" id="save">保存</button>
@@ -703,6 +839,7 @@
   <div class="as-wrap">
     <div class="as-card">
       <div class="as-title">这条记录将被删除，且无法恢复</div>
+      <div class="as-detail" id="delDetail"></div>
       <button class="as-btn danger" id="delConfirm">删除记录</button>
     </div>
     <div class="as-card">
@@ -728,6 +865,38 @@ let selCat = null;        // 占比图选中的分类
 let selDay = null;        // 每日图选中的日期
 let selMon = null;        // 月度图选中的月份
 let editingId = null;     // 正在编辑的记录 id（null = 新增）
+let dataTruncated = false; // 列表是否被服务端截断（统计可能不完整）
+
+/* ================= 预设选项 =================
+   分类严格对齐后端 AI 的 10 个取值（见 Worker 里的 SYSTEM_PROMPT），
+   否则 AI 记的账和手动记的账会分到不同桶里，统计对不上。
+   label 后面可选带 dot：芯片上的小圆点颜色，沿用图标色。 */
+const CAT_EXPENSE = [
+  { v: '餐饮', dot: '#FF9500' },
+  { v: '交通', dot: '#007AFF' },
+  { v: '购物', dot: '#FF2D55' },
+  { v: '娱乐', dot: '#AF52DE' },
+  { v: '居住', dot: '#30B0C7' },
+  { v: '医疗', dot: '#FF3B30' },
+  { v: '通讯', dot: '#5856D6' },
+  { v: '教育', dot: '#A2845E' },
+  { v: '人情', dot: '#FFCC00' },
+  { v: '其他', dot: '#8E8E93' },
+];
+
+/* 收入侧的分类后端统一归「其他」，但手动记账时列几个常用的更顺手。
+   它们最终仍以文本存库，统计时按「其他」口径看即可。 */
+const CAT_INCOME = [
+  { v: '工资' }, { v: '奖金' }, { v: '红包' }, { v: '理财' }, { v: '报销' }, { v: '退款' }, { v: '其他' },
+];
+
+/* 支付方式。按使用频率排序，前几个一眼就能点中 */
+const ACCOUNTS_EXPENSE = [
+  { v: '微信' }, { v: '支付宝' }, { v: '银行卡' }, { v: '现金' }, { v: '信用卡' }, { v: '云闪付' },
+];
+const ACCOUNTS_INCOME = [
+  { v: '微信' }, { v: '支付宝' }, { v: '银行卡' }, { v: '现金' },
+];
 
 const $ = (id) => document.getElementById(id);
 
@@ -776,9 +945,12 @@ function fmtShort(n) {
 }
 function fmtPct(p) { return (p >= 99.95 ? 100 : p >= 10 ? p.toFixed(0) : p.toFixed(1)) + '%'; }
 function niceStep(maxV) {
-  const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+  const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000];
   for (const st of steps) if (maxV / st <= 3) return st;
-  return 100000;
+  /* 兜底按数量级递推，而不是写死 —— 巨额数据下刻度也不会只剩一两根 */
+  let st = 1000000;
+  while (maxV / st > 3) st *= 2;
+  return st;
 }
 function recDate(r) { return new Date(r.occurred_at); }
 function inMonth(d, y, m) { return d.getFullYear() === y && d.getMonth() === m; }
@@ -825,25 +997,41 @@ const ICONS = {
   empty:   { c: '#8E8E93', s: svg('<path d="M6 2h12v20l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5V2z"/><line x1="9.5" y1="7" x2="14.5" y2="7"/><line x1="9.5" y1="11" x2="14.5" y2="11"/>') },
 };
 
+/* ================= 分类图标 =================
+   图标表比分类表「宽」：travel / wear 没有独立分类，但记账时
+   「衣服」「回家机票」这类备注仍该显示对应图案，靠 note 二次匹配兜。
+   这样统计口径（10 类）和视觉辨识度两不误。 */
+
 const RULES = [
-  { i: 'travel',  k: ['旅行', '旅游', '酒店', '民宿', '度假', '火车', '景区', '机票', '航班'] },
-  { i: 'transit', k: ['交通', '车', '打车', '地铁', '公交', '加油', '停车', '出行', '骑行', '单车', '滴滴'] },
-  { i: 'food',    k: ['餐', '饭', '吃', '食', '外卖', '宵夜', '夜宵', '奶茶', '咖啡', '饮料', '茶', '水果', '零食', '菜'] },
-  { i: 'shop',    k: ['购物', '买', '超市', '便利', '电商', '淘宝', '京东', '拼多多', '百货', '日用'] },
-  { i: 'home',    k: ['住', '房租', '水电', '物业', '家用', '家居', '燃气', '房贷'] },
-  { i: 'comm',    k: ['话费', '流量', '通讯', '月租', '宽带', '订阅'] },
-  { i: 'fun',     k: ['娱乐', '游戏', '电影', '视频', '演出', '会员', '音乐', '追剧'] },
-  { i: 'health',  k: ['医疗', '药', '医院', '看病', '健康', '体检'] },
-  { i: 'edu',     k: ['教育', '学习', '书', '课', '培训', '学费', '文具'] },
-  { i: 'gift',    k: ['礼物', '人情', '红包', '份子', '孝敬', '礼金'] },
-  { i: 'wear',    k: ['衣', '鞋', '美妆', '护肤', '化妆', '包', '饰'] },
+  /* 顺序即优先级：先匹配到的赢。旅行排在娱乐/购物前，
+     免得「酒店」被更靠后的规则抢走图标。 */
+  { i: 'travel',  k: ['旅行', '旅游', '酒店', '民宿', '度假', '景区', '机票', '航班', '高铁', '风景'] },
+  { i: 'transit', k: ['交通', '打车', '地铁', '公交', '加油', '停车', '出行', '骑行', '单车', '滴滴', '高铁', '火车', '出租', '车费', '高速'] },
+  { i: 'food',    k: ['餐', '饭', '吃', '食', '外卖', '宵夜', '夜宵', '奶茶', '咖啡', '饮料', '茶', '水果', '零食', '菜', '食堂', '烧烤', '火锅', '小吃', '酒'] },
+  { i: 'shop',    k: ['购物', '超市', '便利', '电商', '淘宝', '京东', '拼多多', '百货', '日用', '商场', '快递', '下单'] },
+  { i: 'home',    k: ['居住', '住', '房租', '水电', '物业', '家用', '家居', '燃气', '房贷', '租房', '电费', '水费', '煤气'] },
+  { i: 'comm',    k: ['通讯', '话费', '流量', '月租', '宽带', '订阅', '云服务', '服务器', '网费'] },
+  { i: 'fun',     k: ['娱乐', '游戏', '电影', '视频', '演出', '会员', '音乐', '追剧', 'KTV', '酒吧', '剧本杀', '健身'] },
+  { i: 'health',  k: ['医疗', '药', '医院', '看病', '健康', '体检', '挂号', '诊所', '牙'] },
+  { i: 'edu',     k: ['教育', '学习', '书', '课', '培训', '学费', '文具', '考试', '网课'] },
+  { i: 'gift',    k: ['人情', '礼物', '红包', '份子', '孝敬', '礼金', '请客'] },
+  /* 服饰没有独立分类（后端只出 10 类），但图标保留，靠备注/分类文本命中 */
+  { i: 'wear',    k: ['服饰', '衣', '鞋', '美妆', '护肤', '化妆', '裤', '帽', '饰', '包'] },
 ];
 
+/* 命中规则：分类文本优先，没中再用备注兜一次。
+   这样 AI 归到「购物」、备注写「优衣库T恤」的记录，也能显示服饰图标。 */
 function iconFor(r) {
   if (r.type === 'income') return ICONS.income;
-  const c = String(r.category || '').toLowerCase();
+  const cat = String(r.category || '').toLowerCase();
   for (const rule of RULES) {
-    if (rule.k.some(k => c.includes(k))) return ICONS[rule.i];
+    if (rule.k.some(k => cat.includes(k))) return ICONS[rule.i];
+  }
+  const note = String(r.note || '').toLowerCase();
+  if (note) {
+    for (const rule of RULES) {
+      if (rule.k.some(k => note.includes(k))) return ICONS[rule.i];
+    }
   }
   return ICONS.other;
 }
@@ -990,10 +1178,15 @@ function render() {
 }
 
 /* ================= 数据加载 ================= */
-/* 尽量多拉历史数据用于统计；接口对大 limit 报错时自动降级 */
+/* 尽量多拉历史数据用于统计；接口对大 limit 报错时自动降级。
+   服务端返回 truncated=true 说明可能被截断，此时统计会少算 ——
+   记下来给统计页出警示条，不能静默。 */
 async function fetchRecords() {
-  try { return await api('/api/records?limit=1000'); }
-  catch (e) { return await api('/api/records?limit=100'); }
+  let res;
+  try { res = await api('/api/records?limit=1000'); }
+  catch (e) { res = await api('/api/records?limit=100'); }
+  dataTruncated = !!res.truncated;
+  return res;
 }
 
 async function load() {
@@ -1047,6 +1240,16 @@ function updateMonthNav() {
 function renderStats() {
   const y = statYm.y, m = statYm.m;
   const mr = monthRecords(y, m);
+
+  /* 数据被截断时先把话说清楚，否则下面的数字看着正常、其实少算了 */
+  const warn = $('truncWarn');
+  if (dataTruncated) {
+    warn.hidden = false;
+    $('truncWarnText').textContent =
+      '已加载 ' + records.length + ' 条，达到接口上限，统计可能不完整。建议改用服务端统计接口。';
+  } else {
+    warn.hidden = true;
+  }
 
   /* 摘要卡 */
   let exp = 0, inc = 0;
@@ -1347,13 +1550,142 @@ function toLocalInput(d) {
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
 
-function syncFormMode() {
+function syncFormMode(opts) {
   const inc = formType === 'income';
+  const keepValue = !!(opts && opts.keepValue);
   $('addSheet').classList.toggle('income', inc);
-  $('fCategory').placeholder = inc ? '如 工资 / 理财 / 红包' : '如 餐饮 / 交通 / 购物';
   $('accountLabel').textContent = inc ? '到账方式' : '支付方式';
-  $('fAccount').placeholder = inc ? '如 银行卡 / 微信' : '如 微信 / 支付宝';
+  $('catLabel').textContent = inc ? '收入类型' : '分类';
+
+  const catOpts = inc ? CAT_INCOME : CAT_EXPENSE;
+  const acctOpts = inc ? ACCOUNTS_INCOME : ACCOUNTS_EXPENSE;
+
+  /* keepValue = 打开编辑既有记录：原值一律保留，哪怕不在选项集里
+     （AI 可能给过「午餐」这种值，得原样带回去，不然一编辑就丢了）。
+     否则 = 用户手动切类型：旧值不在新选项集里就该清掉 ——
+     「餐饮」对收入类型毫无意义，留着只会让自定义框莫名其妙弹出来还带旧值。 */
+  if (!keepValue) {
+    dropIfAbsent('cat', catOpts);
+    dropIfAbsent('acct', acctOpts);
+  }
+
+  collapseCustom('cat');
+  collapseCustom('acct');
+  buildChips('cat', catOpts);
+  buildChips('acct', acctOpts);
 }
+
+/** 值不在选项集里就清空（仅在用户切类型时调用） */
+function dropIfAbsent(kind, options) {
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+  const cur = (hidden.value || '').trim();
+  if (cur && !options.some(o => o.v === cur)) hidden.value = '';
+}
+
+/* ================= 芯片选择器 =================
+   一对「分类」「支付方式」共用一个实现：
+     buildChips 铺选项，setChipValue 设值，readChip 取值。
+   值都落在隐藏 input 里，提交时读法跟原来完全一致，改动面最小。 */
+
+/** 铺芯片行。rawValue（当前值）不在选项里时会自动切到「自定义」态 */
+function buildChips(kind, options) {
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+  const cur = (hidden.value || '').trim();
+
+  box.innerHTML = options.map(o =>
+    '<button type="button" class="chip' + (o.v === cur ? ' on' : '') + '" data-val="' + esc(o.v) + '">' +
+      (o.dot ? '<i class="dot-c" style="background:' + o.dot + '"></i>' : '') +
+      esc(o.v) +
+    '</button>'
+  ).join('');
+
+  /* 当前值不在预设里（AI 记的「午餐」，或手输的旧值）→ 亮起自定义并回填，
+     这样编辑老记录不会悄无声息地把分类弄丢 */
+  if (cur && !options.some(o => o.v === cur)) {
+    openCustom(kind, cur);
+  }
+}
+
+function setChipValue(kind, val) {
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+  hidden.value = val || '';
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  [...box.children].forEach(b => b.classList.toggle('on', b.dataset.val === val));
+}
+
+function readChip(kind) {
+  return ($(kind === 'cat' ? 'fCategory' : 'fAccount').value || '').trim();
+}
+
+function openCustom(kind, val) {
+  const wrap = $(kind === 'cat' ? 'catCustom' : 'acctCustom');
+  const input = $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput');
+  const btn = $(kind === 'cat' ? 'catCustomBtn' : 'acctCustomBtn');
+  wrap.hidden = false;
+  if (val !== undefined) input.value = val;
+  btn.textContent = '收起';
+  /* 自定义态下，预设芯片全部取消高亮 —— 避免「看着选的是餐饮、实际存的是午餐」 */
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  [...box.children].forEach(b => b.classList.remove('on'));
+}
+
+function collapseCustom(kind) {
+  const wrap = $(kind === 'cat' ? 'catCustom' : 'acctCustom');
+  const input = $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput');
+  const btn = $(kind === 'cat' ? 'catCustomBtn' : 'acctCustomBtn');
+  wrap.hidden = true;
+  input.value = '';
+  btn.textContent = '自定义…';
+}
+
+/** 点芯片：选中并写入隐藏值；点同一项可取消选中 */
+function bindChips(kind) {
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+
+  box.onclick = (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const val = chip.dataset.val;
+    /* 再点一下取消，方便「本来就没打算填」的情况 */
+    const next = hidden.value === val ? '' : val;
+    hidden.value = next;
+    [...box.children].forEach(b => b.classList.toggle('on', b.dataset.val === next));
+    /* 手选预设项后把自定义收起来，否则输入框和芯片会对不上 */
+    if (next) collapseCustom(kind);
+  };
+
+  const customBtn = $(kind === 'cat' ? 'catCustomBtn' : 'acctCustomBtn');
+  const customWrap = $(kind === 'cat' ? 'catCustom' : 'acctCustom');
+  customBtn.onclick = () => {
+    if (customWrap.hidden) {
+      openCustom(kind, hidden.value || '');
+      $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput').focus();
+    } else {
+      collapseCustom(kind);
+    }
+  };
+
+  const ok = $(kind === 'cat' ? 'catCustomOk' : 'acctCustomOk');
+  const input = $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput');
+  const commit = () => {
+    const v = input.value.trim().slice(0, 10);
+    if (!v) { toast('请输入内容', true); return; }
+    hidden.value = v;
+    [...box.children].forEach(b => b.classList.remove('on'));
+    toast('已选：' + v);
+  };
+  ok.onclick = () => { commit(); input.blur(); };
+  input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } };
+}
+
+bindChips('cat');
+bindChips('acct');
+/* 脚本一加载就把默认（支出）的芯片铺好，别等到开抽屉才生成 ——
+   万一 init 提前 return，抽屉里也不会是一片空白 */
+buildChips('cat', CAT_EXPENSE);
+buildChips('acct', ACCOUNTS_EXPENSE);
 
 /* 任一弹层打开时锁定页面滚动 */
 function syncScrollLock() {
@@ -1368,11 +1700,17 @@ function openSheet(rec) {
   $('delEntry').hidden = !rec;
   formType = (rec && rec.type === 'income') ? 'income' : 'expense';
   [...$('typeSeg').children].forEach(b => b.classList.toggle('on', b.dataset.type === formType));
-  syncFormMode();
-  $('fAmount').value = rec ? rec.amount : '';
+
+  /* 先把值写进隐藏 input，再让 syncFormMode 按新类型铺芯片 ——
+     顺序反了的话，芯片铺完会被这里的赋值清掉高亮。
+     keepValue 让原值无论如何都留住（哪怕不在预设里）。 */
   $('fCategory').value = rec ? (rec.category || '') : '';
-  $('fNote').value = rec ? (rec.note || '') : '';
   $('fAccount').value = rec ? (rec.account || '') : '';
+  syncFormMode({ keepValue: true });
+
+  /* amount 可能是 null（AI 没识别出金额），直接塞会给输入框显示 "null" */
+  $('fAmount').value = (rec && rec.amount !== null && rec.amount !== undefined) ? rec.amount : '';
+  $('fNote').value = rec ? (rec.note || '') : '';
   const rd = rec ? new Date(rec.occurred_at) : null;
   $('fTime').value = (rd && !isNaN(rd.getTime())) ? toLocalInput(rd) : nowLocal();
   $('formMsg').textContent = '';
@@ -1381,6 +1719,18 @@ function openSheet(rec) {
   syncScrollLock();
   if (matchMedia('(pointer: fine)').matches) setTimeout(() => $('fAmount').focus(), 350);
 }
+
+/* 日期快捷：改动时间部分，保留原有的时分 —— 用户多半只想改日期 */
+function setQuickDate(offsetDays) {
+  const cur = $('fTime').value;
+  const base = cur ? new Date(cur) : new Date();
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  if (!isNaN(base.getTime())) { d.setHours(base.getHours(), base.getMinutes(), 0, 0); }
+  $('fTime').value = toLocalInput(d);
+}
+$('qToday').onclick = () => setQuickDate(0);
+$('qYesterday').onclick = () => setQuickDate(-1);
 
 function closeSheet() {
   $('mask').classList.remove('on');
@@ -1394,8 +1744,12 @@ $('mask').onclick = (e) => { if (e.target === $('mask')) closeSheet(); };
 $('typeSeg').onclick = (e) => {
   const b = e.target.closest('button');
   if (!b) return;
+  /* 点的是当前已选中的类型就什么也不做 —— 否则会触发 syncFormMode
+     把用户刚填的分类/支付方式清掉（因为旧值不在同一个选项集里） */
+  if (b.dataset.type === formType) return;
   formType = b.dataset.type;
   [...$('typeSeg').children].forEach(x => x.classList.toggle('on', x === b));
+  /* 真正切类型：不传 keepValue，旧值不在新选项集里就清掉 */
   syncFormMode();
 };
 
@@ -1420,17 +1774,25 @@ async function saveEdit(payload) {
 $('save').onclick = async () => {
   const amount = $('fAmount').value.trim();
   if (!amount) { $('formMsg').textContent = '请输入金额'; $('formMsg').className = 'msg error'; return; }
+  if (Number.isNaN(Number(amount)) || Number(amount) < 0) {
+    $('formMsg').textContent = '金额格式不对'; $('formMsg').className = 'msg error'; return;
+  }
   const tVal = $('fTime').value;
   const tDate = tVal ? new Date(tVal) : null;
-  const occurred = (tDate && !isNaN(tDate.getTime())) ? tDate.toISOString() : null;
+  /* 直接拼 +08:00，不用 toISOString()：后者按设备时区换算，
+     设备时区不是东八区时（出差、系统时区设成 UTC）时间会整体偏掉 */
+  const occurred = (tDate && !isNaN(tDate.getTime()))
+    ? tDate.getFullYear() + '-' + pad(tDate.getMonth() + 1) + '-' + pad(tDate.getDate()) +
+      'T' + pad(tDate.getHours()) + ':' + pad(tDate.getMinutes()) + ':00+08:00'
+    : null;
   $('save').disabled = true;
   try {
     const payload = {
       type: formType,
       amount: Number(amount),
-      category: $('fCategory').value.trim() || null,
+      category: readChip('cat') || null,
       note: $('fNote').value.trim() || null,
-      account: $('fAccount').value.trim() || null,
+      account: readChip('acct') || null,
     };
     if (occurred) payload.occurred_at = occurred;
     if (editingId) {
@@ -1446,9 +1808,12 @@ $('save').onclick = async () => {
       });
       closeSheet();
       await load();
-      if (occurred && new Date(occurred).toDateString() !== new Date().toDateString()) {
-        const od = new Date(occurred);
-        toast('已记入 ' + (od.getMonth() + 1) + '月' + od.getDate() + '日');
+      const od = occurred ? new Date(occurred) : null;
+      const now = new Date();
+      if (od && !isNaN(od.getTime()) &&
+          (od.getFullYear() !== now.getFullYear() || od.getMonth() !== now.getMonth())) {
+        /* 跨月要说清楚：首页只汇总本月，不然用户看金额没变会以为没记上 */
+        toast('已记入 ' + (od.getMonth() + 1) + '月' + od.getDate() + '日（非本月，首页汇总不变）');
       } else {
         toast('已保存');
       }
@@ -1470,6 +1835,28 @@ $('save').onclick = async () => {
 /* ================= 事件：删除（点记录弹出确认） ================= */
 function openDel(id) {
   pendingDeleteId = id;
+  /* 把要删的东西写清楚 —— 只写「这条记录」的话，点错行时根本不知道删的是哪笔 */
+  const rec = records.find(r => String(r.id) === String(id));
+  const box = $('delDetail');
+  if (rec) {
+    const ic = iconFor(rec);
+    const isExp = rec.type !== 'income';
+    const bits = [];
+    if (rec.note) bits.push(rec.note);
+    if (rec.account) bits.push(rec.account);
+    const d = new Date(rec.occurred_at);
+    if (!isNaN(d.getTime())) bits.push((d.getMonth() + 1) + '月' + d.getDate() + '日');
+    box.innerHTML =
+      '<div class="ad-ic" style="color:' + ic.c + ';background:' + ic.c + '1E">' + ic.s + '</div>' +
+      '<div>' +
+        '<div class="ad-t">' + esc(rec.category || (isExp ? '支出' : '收入')) +
+          ' ' + (isExp ? '−' : '+') + money(rec.amount) + '</div>' +
+        (bits.length ? '<div class="ad-s">' + esc(bits.join(' · ')) + '</div>' : '') +
+      '</div>';
+    box.hidden = false;
+  } else {
+    box.hidden = true;
+  }
   $('delMask').classList.add('on');
   syncScrollLock();
 }
