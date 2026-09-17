@@ -903,8 +903,12 @@
 let lastTap = 0;
 let lastTapX = 0, lastTapY = 0;
 document.addEventListener('touchend', function (e) {
-  /* 落在输入框上的点击不管，免得影响选词/光标 */
-  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  /* 落在「本来双击就有意义」的东西上就不管：输入框要选词、
+     链接/按钮要连点、可选中的文本要选字。宁可漏拦一次缩放，
+     也不要把页面里正常的双击交互弄坏。 */
+  const el = e.target;
+  if (el && (el.closest('input, textarea, select, a, button, label, [contenteditable]') ||
+             el.isContentEditable)) return;
   const now = Date.now();
   const t = e.changedTouches && e.changedTouches[0];
   if (!t) return;
@@ -940,6 +944,9 @@ document.addEventListener('wheel', function (e) {
 const LS_KEY = 'ledger_cfg_v1';
 let cfg = null;
 let records = [];
+/* 「先建后删」降级里删失败的旧记录 id。加载新数据时清空 ——
+   下一次从服务端拉的才是真实状态，本地隐藏只是过渡手段 */
+let droppedIds = new Set();
 let formType = 'expense';
 let pendingDeleteId = null;
 let toastTimer = null;
@@ -989,6 +996,16 @@ function loadCfg() {
 }
 function saveCfg(c) { localStorage.setItem(LS_KEY, JSON.stringify(c)); }
 
+/* 校验一个配置里的 api 是否可用：必须是 http/https 的合法绝对地址。
+   挡的是 javascript:、data:、vbscript: 这类会被当脚本/内联内容执行的伪协议 ——
+   它们一旦写进 localStorage 再被拿去做 fetch 目标，等于把注入点留在了配置里。 */
+function isValidApiUrl(u) {
+  if (!u) return false;
+  let parsed;
+  try { parsed = new URL(u); } catch { return false; }
+  return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+}
+
 /* 支持用带参数的链接一次配好，例如：
    https://xxx.pages.dev/#api=https://yyy.workers.dev&token=abcdef
    参数写进本地存储后立刻从地址栏抹掉。 */
@@ -1000,10 +1017,13 @@ function saveCfg(c) { localStorage.setItem(LS_KEY, JSON.stringify(c)); }
   if (!api && !token) return;
   const cur = loadCfg() || {};
   const next = { api: api || cur.api || '', token: token || cur.token || '' };
-  if (next.api && next.token) {
-    saveCfg(next);
+  /* 链接里给的东西不合法就当没给，别污染已有配置 */
+  if (!isValidApiUrl(next.api) || !next.token.trim()) {
     history.replaceState(null, '', location.pathname);
+    return;
   }
+  saveCfg(next);
+  history.replaceState(null, '', location.pathname);
 })();
 
 function setupLink(c) {
@@ -1039,7 +1059,11 @@ function niceStep(maxV) {
 function recDate(r) { return new Date(r.occurred_at); }
 function inMonth(d, y, m) { return d.getFullYear() === y && d.getMonth() === m; }
 function monthRecords(y, m) {
-  return records.filter(r => { const d = recDate(r); return !isNaN(d.getTime()) && inMonth(d, y, m); });
+  return records.filter(r => {
+    if (droppedIds.has(r.id)) return false;
+    const d = recDate(r);
+    return !isNaN(d.getTime()) && inMonth(d, y, m);
+  });
 }
 function monthKeyOf(y, m) { return y + '-' + pad(m + 1); }
 function hm(v) {
@@ -1201,6 +1225,10 @@ function itemHtml(r) {
 function render() {
   const now = new Date();
 
+  /* 先滤掉「本地隐藏」的旧记录（先建后删失败的那条），
+     后面所有汇总、列表、统计都基于干净的数据，口径才一致 */
+  const live = droppedIds.size ? records.filter(r => !droppedIds.has(r.id)) : records;
+
   const mTitle = MN[now.getMonth()] + '月';
   $('largeTitle').textContent = mTitle;
   $('navTitle').textContent = mTitle + '账本';
@@ -1208,7 +1236,7 @@ function render() {
 
   /* 本月汇总（按本地时区归属月份） */
   let expense = 0, income = 0, monthCount = 0;
-  records.forEach(r => {
+  live.forEach(r => {
     const d = recDate(r);
     if (isNaN(d.getTime()) || !inMonth(d, now.getFullYear(), now.getMonth())) return;
     if (r.type === 'expense') expense += Number(r.amount);
@@ -1219,9 +1247,9 @@ function render() {
   $('total').textContent = money(expense);
   $('statIncome').textContent = money(income);
   $('statCount').textContent = monthCount + ' 笔';
-  $('recordCount').textContent = '共 ' + records.length + ' 条';
+  $('recordCount').textContent = '共 ' + live.length + ' 条';
 
-  if (!records.length) {
+  if (!live.length) {
     $('list').innerHTML =
       '<div class="state">' +
         '<div class="bubble-big">' + ICONS.empty.s + '</div>' +
@@ -1233,7 +1261,7 @@ function render() {
 
   /* 按天分组（列表只展示最近 60 条，更早的看统计） */
   const MAX_LIST = 60;
-  const shown = records.slice(0, MAX_LIST);
+  const shown = live.slice(0, MAX_LIST);
   const groups = [];
   shown.forEach(r => {
     const d = new Date(r.occurred_at);
@@ -1268,8 +1296,13 @@ function render() {
 async function fetchRecords() {
   let res;
   try { res = await api('/api/records?limit=1000'); }
-  catch (e) { res = await api('/api/records?limit=100'); }
-  dataTruncated = !!res.truncated;
+  catch (e) {
+    res = await api('/api/records?limit=100');
+    /* 降级这一次如果服务端回了 truncated 也算数 —— 不能因为「最后一次
+       响应里没这个字段」就把截断的真相抹掉，那样统计页会静默少算 */
+    dataTruncated = dataTruncated || !!(res && res.truncated);
+  }
+  dataTruncated = dataTruncated || !!(res && res.truncated);
   return res;
 }
 
@@ -1279,6 +1312,8 @@ async function load() {
   try {
     const res = await fetchRecords();
     records = res.data || [];
+    /* 拿到服务端真实数据了，之前的本地隐藏标记就作废 */
+    droppedIds.clear();
     render();
   } catch (e) {
     renderError(e);
@@ -1618,6 +1653,11 @@ $('cfgSave').onclick = async () => {
   const apiUrl = $('cfgApi').value.trim();
   const token = $('cfgToken').value.trim();
   if (!apiUrl || !token) { showSetup('两项都要填', true); return; }
+  /* 存之前先校验来源合法性，别把非法协议写进 localStorage */
+  if (!isValidApiUrl(apiUrl)) {
+    showSetup('API 地址要以 http:// 或 https:// 开头', true);
+    return;
+  }
   const btn = $('cfgSave');
   btn.disabled = true;
   btn.textContent = '连接中…';
@@ -1720,7 +1760,8 @@ function buildChips(kind, options) {
   const cur = (hidden.value || '').trim();
 
   box.innerHTML = options.map(o =>
-    '<button type="button" class="chip' + (o.v === cur ? ' on' : '') + '" data-val="' + esc(o.v) + '">' +
+    '<button type="button" class="chip' + (o.v === cur ? ' on' : '') + '" data-val="' + esc(o.v) + '"' +
+      ' aria-pressed="' + (o.v === cur ? 'true' : 'false') + '">' +
       (o.dot ? '<i class="dot-c" style="background:' + o.dot + '"></i>' : '') +
       esc(o.v) +
     '</button>'
@@ -1737,7 +1778,11 @@ function setChipValue(kind, val) {
   const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
   hidden.value = val || '';
   const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
-  [...box.children].forEach(b => b.classList.toggle('on', b.dataset.val === val));
+  [...box.children].forEach(b => {
+    const on = b.dataset.val === val;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
 }
 
 function readChip(kind) {
@@ -1753,7 +1798,10 @@ function openCustom(kind, val) {
   btn.textContent = '收起';
   /* 自定义态下，预设芯片全部取消高亮 —— 避免「看着选的是餐饮、实际存的是午餐」 */
   const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
-  [...box.children].forEach(b => b.classList.remove('on'));
+  [...box.children].forEach(b => {
+    b.classList.remove('on');
+    b.setAttribute('aria-pressed', 'false');
+  });
 }
 
 function collapseCustom(kind) {
@@ -1777,7 +1825,11 @@ function bindChips(kind) {
     /* 再点一下取消，方便「本来就没打算填」的情况 */
     const next = hidden.value === val ? '' : val;
     hidden.value = next;
-    [...box.children].forEach(b => b.classList.toggle('on', b.dataset.val === next));
+    [...box.children].forEach(b => {
+      const on = b.dataset.val === next;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
     /* 手选预设项后把自定义收起来，否则输入框和芯片会对不上 */
     if (next) collapseCustom(kind);
   };
@@ -1796,11 +1848,18 @@ function bindChips(kind) {
   const ok = $(kind === 'cat' ? 'catCustomOk' : 'acctCustomOk');
   const input = $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput');
   const commit = () => {
-    const v = input.value.trim().slice(0, 10);
+    /* 长度上限只在这里管一次，不依赖 HTML 的 maxlength，
+       免得哪天 maxlength 被去掉、校验就悄悄没了 */
+    const raw = input.value.trim();
+    const v = raw.slice(0, 10);
     if (!v) { toast('请输入内容', true); return; }
+    if (raw.length > 10) toast('最多 10 个字，已截断');
     hidden.value = v;
-    [...box.children].forEach(b => b.classList.remove('on'));
-    toast('已选：' + v);
+    [...box.children].forEach(b => {
+      b.classList.remove('on');
+      b.setAttribute('aria-pressed', 'false');
+    });
+    if (!window.__suppressChipToast) toast('已选：' + v);
   };
   ok.onclick = () => { commit(); input.blur(); };
   input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } };
@@ -1886,11 +1945,16 @@ async function saveEdit(payload) {
     await api(q, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   } catch (e) {
     if (e.status !== 404 && e.status !== 405) throw e;
-    await api('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const created = await api('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     try {
       await api(q, { method: 'DELETE' });
     } catch (e2) {
-      const err = new Error('修改已保存，但旧记录删除失败，请在列表中手动删除重复项');
+      /* 旧记录没删掉。最坏的情况是列表里短暂出现两条一模一样的数据。
+         与其让用户自己去认哪条是旧的，不如在前端把旧 id 标记出来：
+         列表渲染时直接跳过它，等下次刷新回到服务端真实状态。 */
+      droppedIds.add(editingId);
+      if (created && created.id != null) droppedIds.delete(created.id);
+      const err = new Error('修改已保存，但旧记录删除失败，已在页面隐藏重复项');
       err.partial = true;
       throw err;
     }
@@ -2033,6 +2097,14 @@ $('delConfirm').onclick = async () => {
 /* ================= 启动 ================= */
 (async function init() {
   cfg = loadCfg();
+  /* 落盘过的配置也要过一次校验：早期版本（或手动改过 localStorage）可能
+     存着 javascript: 之类的地址，不能因为「它在本地」就当它可信 */
+  if (cfg && !isValidApiUrl(cfg.api)) {
+    localStorage.removeItem(LS_KEY);
+    cfg = null;
+    showSetup('本地保存的地址不合法，请重新填写', true);
+    return;
+  }
   if (!cfg || !cfg.api || !cfg.token) { showSetup(''); return; }
   try {
     await load();
