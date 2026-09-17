@@ -465,6 +465,12 @@
   }
   .field:focus-within label { color: var(--label); }
   .field input { flex: 1; min-width: 0; font-size: 15px; }
+  /* Token 默认打码，右边给个「显示」开关 —— 打码界面看不清自己输对没有，
+     纯 password 反而逼人去别处核对。给个开关，两种需求都照顾到。 */
+  .field .reveal-btn {
+    flex-shrink: 0; font-size: 13px; color: var(--blue, #007AFF);
+    padding: 6px 2px;
+  }
 
   /* ============ 芯片式选择（分类 / 支付方式） ============ */
   /* 芯片块：标题 + 可横向滚动的选项行，替代原来的自由输入框。
@@ -786,12 +792,12 @@
     </div>
     <div class="field">
       <label for="cfgToken">Token</label>
-      <input id="cfgToken" placeholder="你的 API Token" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input id="cfgToken" type="password" placeholder="你的 API Token" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+      <button class="reveal-btn" id="cfgTokenEye" type="button" aria-label="显示 Token">显示</button>
     </div>
   </div>
 
   <button class="btn btn-primary" id="cfgSave">保存并加载</button>
-  <button class="btn btn-tint" id="copyLink" hidden>复制我的专属链接</button>
   <button class="text-btn" id="setupBack" hidden>返回账本</button>
   <p class="msg" id="cfgMsg"></p>
 </div>
@@ -992,9 +998,19 @@ const ACCOUNTS_INCOME = [
 const $ = (id) => document.getElementById(id);
 
 function loadCfg() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { return null; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return null;
+    if (typeof raw.api !== 'string' || typeof raw.token !== 'string') return null;
+    return { api: raw.api.trim(), token: raw.token.trim() };
+  } catch { return null; }
 }
-function saveCfg(c) { localStorage.setItem(LS_KEY, JSON.stringify(c)); }
+function saveCfg(c) {
+  localStorage.setItem(LS_KEY, JSON.stringify({
+    api: String((c && c.api) || '').trim(),
+    token: String((c && c.token) || '').trim(),
+  }));
+}
 
 /* 校验一个配置里的 api 是否可用：必须是 http/https 的合法绝对地址。
    挡的是 javascript:、data:、vbscript: 这类会被当脚本/内联内容执行的伪协议 ——
@@ -1006,34 +1022,47 @@ function isValidApiUrl(u) {
   return parsed.protocol === 'http:' || parsed.protocol === 'https:';
 }
 
-/* 支持用带参数的链接一次配好，例如：
-   https://xxx.pages.dev/#api=https://yyy.workers.dev&token=abcdef
-   参数写进本地存储后立刻从地址栏抹掉。 */
+/* 支持用带参数的链接配好 API 地址，例如：
+   https://xxx.pages.dev/#api=https://yyy.workers.dev
+   配好后立刻从地址栏抹掉。
+
+   这里**刻意不接受链接里传 token**。原因：URL 会进浏览器历史、会被截图、
+   会被分享转发、会同步到别的设备 —— 把凭证写在 URL 里，等于把它撒得到处都是。
+   API 地址不是秘密，传它只是省得手打一长串域名；token 必须自己输。 */
 (function autoConfigFromUrl() {
   const fromHash = new URLSearchParams(location.hash.replace(/^#/, ''));
   const fromQuery = new URLSearchParams(location.search);
   const api = fromHash.get('api') || fromQuery.get('api');
-  const token = fromHash.get('token') || fromQuery.get('token');
-  if (!api && !token) return;
-  const cur = loadCfg() || {};
-  const next = { api: api || cur.api || '', token: token || cur.token || '' };
-  /* 链接里给的东西不合法就当没给，别污染已有配置 */
-  if (!isValidApiUrl(next.api) || !next.token.trim()) {
+  if (!api) return;
+  if (!isValidApiUrl(api)) {
     history.replaceState(null, '', location.pathname);
     return;
   }
-  saveCfg(next);
+  const cur = loadCfg() || {};
+  /* 只更新 api，token 保持原样（没有就留空，等用户自己填） */
+  saveCfg({ api: api, token: cur.token || '' });
   history.replaceState(null, '', location.pathname);
 })();
 
-function setupLink(c) {
-  return location.origin + location.pathname +
-    '#api=' + encodeURIComponent(c.api) + '&token=' + encodeURIComponent(c.token);
-}
-
 /* ================= 格式化 ================= */
+
+/* 金额一律走「分」中转。浮点直接累加会在几十笔后攒出 0.0000000001 这类
+   尾差（0.1+0.2=0.30000000000000004 的老问题），虽然显示时看不出，
+   但结余、占比、日均这些二次运算会把它放大。 */
+function toCents(v) {
+  const n = Number(v);
+  /* null / '' / NaN / Infinity 一律返回 null，让调用方自己决定跳过还是报错。
+     返回 0 是危险的 —— 会把「没填金额」静默算成「花了 0 元」。 */
+  if (v === null || v === undefined || v === '' || !Number.isFinite(n)) return null;
+  return Math.round(n * 100);
+}
+function fromCents(c) { return (Number(c) || 0) / 100; }
+
 function fmtMoney(n) {
-  return Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /* 后端可能回 null / 空串 / 非数字，别让它显示成 ¥NaN 或 ¥Infinity */
+  const v = Number(n);
+  if (n === null || n === undefined || n === '' || !Number.isFinite(v)) return '--';
+  return v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function money(n) { return '¥' + fmtMoney(n); }
 function pad(x) { return String(x).padStart(2, '0'); }
@@ -1056,29 +1085,36 @@ function niceStep(maxV) {
   while (maxV / st > 3) st *= 2;
   return st;
 }
+/* 下面这些一概按北京时间判定归属 —— 别用 getFullYear/getMonth/getDate，
+   那几个取的是「设备本地」的字段。出差在外或系统时区设错时，
+   同一笔记录可能被划到相邻的月份/日期，首页汇总和统计就会对不上账。 */
 function recDate(r) { return new Date(r.occurred_at); }
-function inMonth(d, y, m) { return d.getFullYear() === y && d.getMonth() === m; }
+function inMonth(d, y, m) {
+  const p = bjParts(d);
+  return !!p && p.y === y && p.m === m;
+}
 function monthRecords(y, m) {
   return records.filter(r => {
     if (droppedIds.has(r.id)) return false;
-    const d = recDate(r);
-    return !isNaN(d.getTime()) && inMonth(d, y, m);
+    return inMonth(recDate(r), y, m);
   });
 }
 function monthKeyOf(y, m) { return y + '-' + pad(m + 1); }
 function hm(v) {
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return '';
-  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const p = bjParts(v);
+  return p ? pad(p.h) + ':' + pad(p.mi) : '';
 }
 function dayLabel(d) {
-  const now = new Date();
-  const md = (d.getMonth() + 1) + '月' + d.getDate() + '日';
-  const wd = '周' + WD[d.getDay()];
-  const base = (d.getFullYear() === now.getFullYear()) ? md : d.getFullYear() + '年' + md;
-  if (d.toDateString() === now.toDateString()) return '<span class="d">今天</span> · ' + base + ' ' + wd;
-  const y = new Date(now); y.setDate(y.getDate() - 1);
-  if (d.toDateString() === y.toDateString()) return '<span class="d">昨天</span> · ' + base + ' ' + wd;
+  const p = bjParts(d);
+  if (!p) return '';
+  const np = bjParts(Date.now());
+  const md = (p.m + 1) + '月' + p.d + '日';
+  const wd = '周' + WD[new Date(Date.UTC(p.y, p.m, p.d)).getUTCDay()];
+  const base = (p.y === np.y) ? md : p.y + '年' + md;
+  const key = p.y + '-' + p.m + '-' + p.d;
+  if (key === np.y + '-' + np.m + '-' + np.d) return '<span class="d">今天</span> · ' + base + ' ' + wd;
+  const yb = bjParts(Date.now() - 86400000);
+  if (key === yb.y + '-' + yb.m + '-' + yb.d) return '<span class="d">昨天</span> · ' + base + ' ' + wd;
   return base + ' ' + wd;
 }
 function esc(s) {
@@ -1145,17 +1181,52 @@ function iconFor(r) {
 }
 
 /* ================= 接口 ================= */
+/* 请求超时：fetch 默认不超时，弱网或地址填错时会一直挂着，
+   界面上就是「转圈转到天荒地老」，用户只能干等。给个上限。
+   20 秒 —— 够慢网络跑完一次 AI 识别，又不至于让人怀疑卡死。 */
+const API_TIMEOUT = 20000;
+
+/* 超时拦截器（可整体替换）。默认就是 setTimeout —— 单独包一层是为了
+   让「超时」这条路径能被测试真正跑到：测试里把它换成 0.8 秒的版本，
+   就能在几秒内验证 abort 之后的提示，而不用干等 20 秒。 */
+const armTimeout = (fn, ms) => setTimeout(fn, ms);
+const disarmTimeout = (id) => clearTimeout(id);
+
 async function api(path, options = {}) {
-  const url = cfg.api.replace(/\/+$/, '') + path;
-  const headers = Object.assign({ 'x-token': cfg.token }, options.headers || {});
-  const res = await fetch(url, Object.assign({}, options, { headers }));
-  const data = await res.json().catch(() => ({ ok: false, error: '返回内容不是 JSON' }));
-  if (!res.ok || data.ok === false) {
-    const err = new Error(data.error || ('HTTP ' + res.status));
-    err.status = res.status;
+  if (!cfg || !cfg.api || !cfg.token) {
+    const err = new Error('还没配置 API 地址和 Token');
+    err.code = 'NO_CONFIG';
     throw err;
   }
-  return data;
+  /* 统一把 path 规整成以 / 开头，免得哪天传成 'api/records' 拼出怪地址 */
+  const url = cfg.api.replace(/\/+$/, '') + '/' + String(path).replace(/^\/+/, '');
+
+  const ctrl = new AbortController();
+  const timer = armTimeout(() => ctrl.abort(), API_TIMEOUT);
+
+  try {
+    const headers = Object.assign({ 'x-token': cfg.token }, options.headers || {});
+    const res = await fetch(url, Object.assign({}, options, { headers, signal: ctrl.signal }));
+    const data = await res.json().catch(() => ({ ok: false, error: '返回内容不是 JSON' }));
+    if (!res.ok || data.ok === false) {
+      const err = new Error(data.error || ('HTTP ' + res.status));
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  } catch (e) {
+    /* 超时被 abort 之后 fetch 抛的是 AbortError，翻成人看得懂的话。
+       这里不改错误内容本身 —— 后端是自家写的，错误信息是排障的第一手线索，
+       藏成「服务器不可用」只会让自己debug时更难受。 */
+    if (e && e.name === 'AbortError') {
+      const err = new Error('请求超时（' + (API_TIMEOUT / 1000) + ' 秒），请检查网络或 API 地址');
+      err.code = 'TIMEOUT';
+      throw err;
+    }
+    throw e;
+  } finally {
+    disarmTimeout(timer);
+  }
 }
 
 /* ================= 页面切换 ================= */
@@ -1178,7 +1249,13 @@ function showSetup(msg, isErr) {
     $('cfgApi').value = cfg.api || '';
     $('cfgToken').value = cfg.token || '';
   }
-  $('copyLink').hidden = !(cfg && cfg.api && cfg.token);
+  /* 每次进配置页都把 Token 打回码，省得上次点过「显示」就一直明文挂着 */
+  const tok = $('cfgToken');
+  if (tok) {
+    tok.type = 'password';
+    const eye = $('cfgTokenEye');
+    if (eye) { eye.textContent = '显示'; eye.setAttribute('aria-label', '显示 Token'); }
+  }
   $('setupBack').hidden = !cfg;
   window.scrollTo(0, 0);
 }
@@ -1223,29 +1300,37 @@ function itemHtml(r) {
 }
 
 function render() {
-  const now = new Date();
+  /* 一律按北京时间取「今天」，不用设备本地时间 —— 出差在外时
+     「本月」的口径不能跟着设备时区漂 */
+  const np = bjParts(Date.now());
+  const curY = np.y, curM = np.m;
 
   /* 先滤掉「本地隐藏」的旧记录（先建后删失败的那条），
      后面所有汇总、列表、统计都基于干净的数据，口径才一致 */
   const live = droppedIds.size ? records.filter(r => !droppedIds.has(r.id)) : records;
 
-  const mTitle = MN[now.getMonth()] + '月';
+  const mTitle = MN[curM] + '月';
   $('largeTitle').textContent = mTitle;
   $('navTitle').textContent = mTitle + '账本';
   document.title = mTitle + '账本';
 
-  /* 本月汇总（按本地时区归属月份） */
-  let expense = 0, income = 0, monthCount = 0;
+  /* 本月汇总（按北京时间归属月份）。金额先转成「分」再累加 ——
+     直接累加浮点会在几十上百笔后攒出 0.0000000001 这类尾差，
+     显示时再除回来，账面上永远是干净的分。 */
+  let expenseC = 0, incomeC = 0, monthCount = 0;
   live.forEach(r => {
-    const d = recDate(r);
-    if (isNaN(d.getTime()) || !inMonth(d, now.getFullYear(), now.getMonth())) return;
-    if (r.type === 'expense') expense += Number(r.amount);
-    else income += Number(r.amount);
+    if (!inMonth(recDate(r), curY, curM)) return;
+    /* 金额可能是 null（AI 没认出来），Number(null)=0 会静默算成 0 元，
+       这里直接跳过，让它只出现在列表里等用户去补 */
+    const c = toCents(r.amount);
+    if (c === null) return;
+    if (r.type === 'expense') expenseC += c;
+    else incomeC += c;
     monthCount++;
   });
 
-  $('total').textContent = money(expense);
-  $('statIncome').textContent = money(income);
+  $('total').textContent = money(fromCents(expenseC));
+  $('statIncome').textContent = money(fromCents(incomeC));
   $('statCount').textContent = monthCount + ' 笔';
   $('recordCount').textContent = '共 ' + live.length + ' 条';
 
@@ -1259,30 +1344,38 @@ function render() {
     return;
   }
 
-  /* 按天分组（列表只展示最近 60 条，更早的看统计） */
+  /* 按天分组（列表只展示最近 60 条，更早的看统计）。
+     用 Map 归组，而不是「看跟前一条是不是同一天」——
+     后者只在数据严格按天排序时才成立，一旦顺序有变
+     （服务端改了排序、或者中间插了一条），同一天会被拆成好几段。 */
   const MAX_LIST = 60;
   const shown = live.slice(0, MAX_LIST);
-  const groups = [];
+  const groupMap = new Map();
   shown.forEach(r => {
-    const d = new Date(r.occurred_at);
-    const valid = !isNaN(d.getTime());
-    const key = valid ? d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() : 'unknown';
-    let g = groups[groups.length - 1];
-    if (!g || g.key !== key) { g = { key: key, valid: valid, d: d, items: [] }; groups.push(g); }
-    g.items.push(r);
+    const d = recDate(r);
+    const p = bjParts(d);
+    const key = p ? (p.y + '-' + pad(p.m + 1) + '-' + pad(p.d)) : 'unknown';
+    if (!groupMap.has(key)) groupMap.set(key, { key: key, valid: !!p, d: d, items: [] });
+    groupMap.get(key).items.push(r);
   });
+  const groups = [...groupMap.values()];
 
   $('list').innerHTML = groups.map(g => {
     let spent = 0, earned = 0;
     g.items.forEach(r => {
-      if (r.type !== 'income') spent += Number(r.amount);
-      else earned += Number(r.amount);
+      const c = toCents(r.amount);
+      if (c === null) return;
+      if (r.type !== 'income') spent += c;
+      else earned += c;
     });
-    const sum = spent > 0 ? '支出 ' + money(spent) : (earned > 0 ? '收入 ' + money(earned) : '');
+    const sum = spent > 0 ? '支出 ' + money(fromCents(spent)) : (earned > 0 ? '收入 ' + money(fromCents(earned)) : '');
     return '<div class="group-head"><span>' + (g.valid ? dayLabel(g.d) : '记录') + '</span>' +
       (sum ? '<span class="sum">' + sum + '</span>' : '') + '</div>' +
       '<div class="card">' + g.items.map(itemHtml).join('') + '</div>';
-  }).join('') + (records.length > MAX_LIST
+  }).join('') + (live.length > MAX_LIST
+    /* 判据必须用 live.length 而不是 records.length：被 droppedIds 隐藏掉的
+       记录不该算进「够不够 60 条」，否则明明只显示了 59 条
+       却还提示「仅显示最近 60 条」 */
     ? '<div class="more-note">仅显示最近 ' + MAX_LIST + ' 条，更早记录见「统计」</div>'
     : '');
 
@@ -1290,33 +1383,88 @@ function render() {
 }
 
 /* ================= 数据加载 ================= */
-/* 尽量多拉历史数据用于统计；接口对大 limit 报错时自动降级。
-   服务端返回 truncated=true 说明可能被截断，此时统计会少算 ——
-   记下来给统计页出警示条，不能静默。 */
+/* 把服务端数据洗干净再进内存 —— 后端是自家写的，但「自家写的」不等于
+   「永远不会出错」。一条脏数据能让整个页面崩掉，不值当。 */
+function isFiniteNum(v) {
+  return typeof v === 'number' ? Number.isFinite(v) : Number.isFinite(Number(v));
+}
+/* 一条记录至少要能认出来：有 id、有合法 type、金额是个有限数。
+   金额为 null（AI 没认出来）的记录要留下 —— 那是给人补的，不是垃圾。
+   但 null 混进统计会被 Number(null)=0 静默算成 0 元，统计侧要单独挡。 */
+function validRecord(r) {
+  if (!r || typeof r !== 'object') return false;
+  if (r.id === null || r.id === undefined || r.id === '') return false;
+  if (r.type !== 'expense' && r.type !== 'income') return false;
+  return true;
+}
+function safeArray(v) { return Array.isArray(v) ? v : []; }
+
+/* 翻页拉全量。原来一次要 1000 条，超了就只能「诚实地算不准」；
+   现在按 500 一页翻，直到服务端说没有下一页。
+   设个页数上限兜底：真出 bug（比如 has_more 永远是 true）也不会转到死。 */
+const PAGE_SIZE = 500;
+const MAX_PAGES = 40; // 20000 条，够用很久了
+
 async function fetchRecords() {
-  let res;
-  try { res = await api('/api/records?limit=1000'); }
+  /* 每次加载都要清零 —— 上一次是截断的，不代表这一次也是。
+     忘了清零的话，某次截断之后警示条会一直挂着，再也消不掉。
+     降到 100 时的链路内累加仍然保留（见下）。 */
+  dataTruncated = false;
+
+  let first;
+  try { first = await api('/api/records?limit=' + PAGE_SIZE); }
   catch (e) {
-    res = await api('/api/records?limit=100');
-    /* 降级这一次如果服务端回了 truncated 也算数 —— 不能因为「最后一次
-       响应里没这个字段」就把截断的真相抹掉，那样统计页会静默少算 */
-    dataTruncated = dataTruncated || !!(res && res.truncated);
+    /* 老版本后端不认这个 limit / 参数，退回小批量再试一次 */
+    first = await api('/api/records?limit=100');
+    dataTruncated = dataTruncated || !!(first && first.truncated);
   }
-  dataTruncated = dataTruncated || !!(res && res.truncated);
-  return res;
+  dataTruncated = dataTruncated || !!(first && first.truncated);
+
+  const all = safeArray(first && first.data).filter(validRecord);
+
+  /* 服务端给了 has_more 就按它翻；没给（老版本）就看这一页有没有装满。
+     一直翻到「没有下一页」或撞上页数上限。 */
+  let more = first && typeof first.has_more === 'boolean'
+    ? first.has_more
+    : all.length >= PAGE_SIZE;
+
+  let page = 1;
+  while (more && page < MAX_PAGES) {
+    const res = await api('/api/records?limit=' + PAGE_SIZE + '&offset=' + all.length);
+    const batch = safeArray(res && res.data).filter(validRecord);
+    if (!batch.length) break;               // 服务端说还有、但给不出东西，别死转
+    all.push(...batch);
+    dataTruncated = dataTruncated || !!res.truncated;
+    more = typeof res.has_more === 'boolean' ? res.has_more : batch.length >= PAGE_SIZE;
+    page++;
+  }
+
+  /* 撞上页数上限说明还没拉完，这时候必须让警示条亮起来 */
+  if (more && page >= MAX_PAGES) dataTruncated = true;
+
+  return Object.assign({}, first, { data: all, truncated: dataTruncated });
 }
 
+/* 同一时刻只允许一次加载在跑。连点重试、快速切页签都会触发 load()，
+   并发时谁先回来不确定，先回来的可能反而是旧数据 —— 后写的覆盖先写的
+   就把新数据盖掉了。这里用「自增序号 + 只认最后一次」来防。 */
+let loadSeq = 0;
+
 async function load() {
+  const seq = ++loadSeq;
   setLoading();
   $('refresh').classList.add('spin');
   try {
     const res = await fetchRecords();
-    records = res.data || [];
+    /* 在 await 期间又有新的 load() 发起了 → 我这份已经过期，直接丢掉 */
+    if (seq !== loadSeq) return;
+    records = safeArray(res.data).filter(validRecord);
     /* 拿到服务端真实数据了，之前的本地隐藏标记就作废 */
     droppedIds.clear();
     render();
   } catch (e) {
-    renderError(e);
+    /* 过期的请求连报错都不该显示 —— 它代表的是已经被取代的那一次加载 */
+    if (seq === loadSeq) renderError(e);
     throw e;
   } finally {
     $('refresh').classList.remove('spin');
@@ -1330,7 +1478,7 @@ function setView(v) {
   $('viewList').hidden = v !== 'list';
   $('viewStats').hidden = v !== 'stats';
   if (v === 'stats') {
-    if (!statYm) { const n = new Date(); statYm = { y: n.getFullYear(), m: n.getMonth() }; }
+    if (!statYm) { const p = bjParts(Date.now()); statYm = { y: p.y, m: p.m }; }
     renderStats();
   }
 }
@@ -1345,7 +1493,9 @@ function shiftMonth(delta) {
 }
 
 function updateMonthNav() {
-  const cur = new Date();
+  /* 「本月」按北京时间算，不跟设备时区走 */
+  const p = bjParts(Date.now());
+  const isCur = statYm.y === p.y && statYm.m === p.m;
 
   /* 下个月：只在「当前月」禁用 —— 不让翻到未来。
      上个月：只要账本里有任何一条记录就不禁用。
@@ -1353,16 +1503,14 @@ function updateMonthNav() {
      翻到最早那个月之后 mPrev 就被禁死，再也回不去；
      账本为空时更是两个箭头全禁，用户会以为坏了。
      翻月本就是自由浏览，有没有数据是翻过去才知道的事。 */
-  $('mNext').disabled = statYm.y === cur.getFullYear() && statYm.m === cur.getMonth();
+  $('mNext').disabled = isCur;
   $('mPrev').disabled = records.length === 0;
 
   $('mLabel').textContent = statYm.y + '年' + (statYm.m + 1) + '月';
 
   /* 翻离本月后给一个「回到本月」的入口，翻远了能一键回来 */
   const back = $('mBack');
-  if (back) {
-    back.hidden = (statYm.y === cur.getFullYear() && statYm.m === cur.getMonth());
-  }
+  if (back) back.hidden = isCur;
 }
 
 function renderStats() {
@@ -1400,9 +1548,14 @@ function renderStats() {
     if (el) el.hidden = !mr.length;
   });
 
-  /* 摘要卡 */
-  let exp = 0, inc = 0;
-  mr.forEach(r => { if (r.type === 'income') inc += Number(r.amount); else exp += Number(r.amount); });
+  /* 摘要卡。金额都先用「分」累加再除回来，避免浮点尾差 */
+  let expC = 0, incC = 0;
+  mr.forEach(r => {
+    const c = toCents(r.amount);
+    if (c === null) return;   // 金额待补的记录不参与汇总，免得被当成 0 元
+    if (r.type === 'income') incC += c; else expC += c;
+  });
+  const exp = fromCents(expC), inc = fromCents(incC);
   $('stExp').textContent = money(exp);
   $('stInc').textContent = money(inc);
   const bal = inc - exp;
@@ -1416,14 +1569,18 @@ function renderStats() {
     return;
   }
 
-  /* 分类占比（支出） */
+  /* 分类占比（支出）。收入不参与 —— 混进来的话占比会被收入额撑歪 */
   const catMap = new Map();
   mr.forEach(r => {
     if (r.type === 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
     const k = r.category || '未分类';
-    catMap.set(k, (catMap.get(k) || 0) + Number(r.amount));
+    catMap.set(k, (catMap.get(k) || 0) + c);
   });
-  let cats = [...catMap.entries()].map(x => ({ name: x[0], amount: x[1] })).sort((a, b) => b.amount - a.amount);
+  let cats = [...catMap.entries()]
+    .map(x => ({ name: x[0], amount: fromCents(x[1]) }))
+    .sort((a, b) => b.amount - a.amount);
   if (cats.length > 8) {
     const rest = cats.slice(7).reduce((s, c) => s + c.amount, 0);
     cats = cats.slice(0, 7).concat([{ name: '其他', amount: rest, merged: true }]);
@@ -1488,10 +1645,15 @@ function renderDaily(mr, y, m) {
   const amt = new Array(D + 1).fill(0);
   mr.forEach(r => {
     if (r.type === 'income') return;
-    const d = recDate(r);
-    const day = d.getDate();
-    if (day >= 1 && day <= D) amt[day] += Number(r.amount);
+    const c = toCents(r.amount);
+    if (c === null) return;
+    const p = bjParts(recDate(r));
+    if (!p) return;
+    const day = p.d;
+    if (day >= 1 && day <= D) amt[day] += c;
   });
+  /* 后面画图时把「分」换算回元 */
+  for (let i = 1; i <= D; i++) amt[i] = fromCents(amt[i]);
 
   if (!amt.some(v => v > 0)) {
     box.innerHTML = '<div class="chart-empty">本月暂无支出</div>';
@@ -1499,8 +1661,8 @@ function renderDaily(mr, y, m) {
     return;
   }
 
-  const cur = new Date();
-  const today = (y === cur.getFullYear() && m === cur.getMonth()) ? cur.getDate() : 0;
+  const cp = bjParts(Date.now());
+  const today = (y === cp.y && m === cp.m) ? cp.d : 0;
   const totalExp = amt.reduce((s, v) => s + v, 0);
   const maxV = Math.max.apply(null, amt);
   const maxDay = amt.indexOf(maxV);
@@ -1550,11 +1712,13 @@ function renderMonthly() {
   for (let i = 0; i < 6; i++) { months.unshift({ y: y, m: m }); m--; if (m < 0) { m = 11; y--; } }
 
   const data = months.map(mm => {
-    let e = 0, inc = 0;
+    let eC = 0, incC = 0;
     monthRecords(mm.y, mm.m).forEach(r => {
-      if (r.type === 'income') inc += Number(r.amount); else e += Number(r.amount);
+      const c = toCents(r.amount);
+      if (c === null) return;
+      if (r.type === 'income') incC += c; else eC += c;
     });
-    return { y: mm.y, m: mm.m, e: e, i: inc };
+    return { y: mm.y, m: mm.m, e: fromCents(eC), i: fromCents(incC) };
   });
 
   if (!data.some(d => d.e > 0 || d.i > 0)) {
@@ -1608,8 +1772,8 @@ $('viewSeg').onclick = (e) => {
 $('mPrev').onclick = () => shiftMonth(-1);
 $('mNext').onclick = () => shiftMonth(1);
 $('mBack').onclick = () => {
-  const n = new Date();
-  statYm = { y: n.getFullYear(), m: n.getMonth() };
+  const p = bjParts(Date.now());
+  statYm = { y: p.y, m: p.m };
   selCat = null; selDay = null; selMon = null;
   renderStats();
 };
@@ -1684,16 +1848,13 @@ $('setupBack').onclick = async () => {
   }
 };
 
-$('copyLink').onclick = async () => {
-  const c = loadCfg();
-  if (!c || !c.api || !c.token) return;
-  const link = setupLink(c);
-  try {
-    await navigator.clipboard.writeText(link);
-    toast('已复制，可存成书签或发给自己');
-  } catch {
-    window.prompt('手动复制这条链接：', link);
-  }
+/* Token 打码开关。默认打码（防肩窥/录屏），点一下可以看明文核对。 */
+$('cfgTokenEye').onclick = () => {
+  const input = $('cfgToken');
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  $('cfgTokenEye').textContent = show ? '隐藏' : '显示';
+  $('cfgTokenEye').setAttribute('aria-label', show ? '隐藏 Token' : '显示 Token');
 };
 
 /* ================= 事件：主页 ================= */
@@ -1707,13 +1868,33 @@ addEventListener('scroll', () => {
 }, { passive: true });
 
 /* ================= 事件：记一笔 ================= */
+/* 账本统一按北京时间。设备时区不是东八区时（出差、系统时区设错），
+   直接 getHours() 取的是设备本地小时 —— 后端存的 20:30 在东京会显示成 21:30，
+   一存回去就凭空多一小时，来回编辑一次漂一点。
+   所以这里一律先换算成北京时间再取各个字段，跟设备时区彻底解耦。 */
+const BJ_OFFSET = 8 * 3600 * 1000;
+
+/** 取某个时间点的「北京时间」各字段。返回 UTC 方法读出的值 —— 因为
+    我们已经手动加了 8 小时偏移，再用 UTC 方法读出来的就是北京时间。 */
+function bjParts(v) {
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return null;
+  const b = new Date(d.getTime() + BJ_OFFSET);
+  return {
+    y: b.getUTCFullYear(), m: b.getUTCMonth(), d: b.getUTCDate(),
+    h: b.getUTCHours(), mi: b.getUTCMinutes(),
+  };
+}
+
 function nowLocal() {
-  const n = new Date();
-  return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':' + pad(n.getMinutes());
+  const p = bjParts(Date.now());
+  return p.y + '-' + pad(p.m + 1) + '-' + pad(p.d) + 'T' + pad(p.h) + ':' + pad(p.mi);
 }
 
 function toLocalInput(d) {
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const p = bjParts(d);
+  if (!p) return '';
+  return p.y + '-' + pad(p.m + 1) + '-' + pad(p.d) + 'T' + pad(p.h) + ':' + pad(p.mi);
 }
 
 function syncFormMode(opts) {
@@ -1905,14 +2086,19 @@ function openSheet(rec) {
   if (matchMedia('(pointer: fine)').matches) setTimeout(() => $('fAmount').focus(), 350);
 }
 
-/* 日期快捷：改动时间部分，保留原有的时分 —— 用户多半只想改日期 */
+/* 日期快捷：只改日期，保留原有的时分 —— 用户多半只想换个日子。
+   全程按北京时间算：拿现在的北京日期 ± N 天，再套回原来的时分。
+   这里不碰 Date 对象的本地方法，免得设备时区一换就漂。 */
 function setQuickDate(offsetDays) {
   const cur = $('fTime').value;
-  const base = cur ? new Date(cur) : new Date();
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  if (!isNaN(base.getTime())) { d.setHours(base.getHours(), base.getMinutes(), 0, 0); }
-  $('fTime').value = toLocalInput(d);
+  const base = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(cur) ? cur : nowLocal();
+  const hhmi = base.slice(11);                     // "HH:MM"
+  const np = bjParts(Date.now());
+  /* 用 UTC 构造「北京日期」再加天数，避开设备时区 */
+  const d = new Date(Date.UTC(np.y, np.m, np.d));
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  const day = d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+  $('fTime').value = day + 'T' + hhmi;
 }
 $('qToday').onclick = () => setQuickDate(0);
 $('qYesterday').onclick = () => setQuickDate(-1);
@@ -1962,24 +2148,58 @@ async function saveEdit(payload) {
 }
 
 $('save').onclick = async () => {
+  /* 上一次校验留下的红字要先擦掉：不然这次改对了、点了保存，
+     屏幕上还挂着上一轮的「金额太大了」，看着像是又报了一次错。 */
+  $('formMsg').textContent = '';
+  $('formMsg').className = 'msg';
+
   const amount = $('fAmount').value.trim();
   if (!amount) { $('formMsg').textContent = '请输入金额'; $('formMsg').className = 'msg error'; return; }
-  if (Number.isNaN(Number(amount)) || Number(amount) < 0) {
-    $('formMsg').textContent = '金额格式不对'; $('formMsg').className = 'msg error'; return;
+
+  /* 金额校验。原来只挡了「不是数字」和「负数」，于是这几种都能溜进去：
+       0        —— 记一笔 0 元的账没有任何意义，多半是手滑
+       0.001    —— 三位小数，存进去后显示成 ¥0.00，但统计里是真按 0.001 累加的
+       1e+100   —— 科学计数法，统计直接变 Infinity
+     正则卡死格式：整数不带前导零、小数最多两位。顺手也挡掉了 "1e5"、"+"、空格。 */
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(amount)) {
+    $('formMsg').textContent = '金额只能填数字，最多两位小数';
+    $('formMsg').className = 'msg error';
+    return;
   }
+  const amountNum = Number(amount);
+  if (!Number.isFinite(amountNum)) {
+    $('formMsg').textContent = '金额超出可处理范围';
+    $('formMsg').className = 'msg error';
+    return;
+  }
+  if (amountNum <= 0) {
+    $('formMsg').textContent = '金额要大于 0';
+    $('formMsg').className = 'msg error';
+    return;
+  }
+  /* 上限 1000 万。理论上没理由超，真超了更可能是识别错了
+     （比如把日期 20260917 认成金额），宁可拦住让人自己确认一下。 */
+  if (amountNum > 10000000) {
+    $('formMsg').textContent = '金额太大了，请确认是否填错';
+    $('formMsg').className = 'msg error';
+    return;
+  }
+
   const tVal = $('fTime').value;
-  const tDate = tVal ? new Date(tVal) : null;
-  /* 直接拼 +08:00，不用 toISOString()：后者按设备时区换算，
-     设备时区不是东八区时（出差、系统时区设成 UTC）时间会整体偏掉 */
-  const occurred = (tDate && !isNaN(tDate.getTime()))
-    ? tDate.getFullYear() + '-' + pad(tDate.getMonth() + 1) + '-' + pad(tDate.getDate()) +
-      'T' + pad(tDate.getHours()) + ':' + pad(tDate.getMinutes()) + ':00+08:00'
-    : null;
+  /* datetime-local 给的是「不带时区的本地时间」字符串，形如 2026-09-17T20:30。
+     账本约定全按北京时间，所以直接把它当北京时间拼上 +08:00 就行 ——
+     不要先 new Date() 再取 getHours()：那个取的是设备本地小时，
+     出差换了时区，同一笔记录会被读出不同的时间。 */
+  const occurred = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(tVal) ? tVal + ':00+08:00' : null;
   $('save').disabled = true;
   try {
     const payload = {
-      type: formType,
-      amount: Number(amount),
+      /* formType 只可能是 expense/income，但这是从按钮 dataset 来的，
+         兜一道 —— 前端校验不能替代「不信任自己」 */
+      type: formType === 'income' ? 'income' : 'expense',
+      amount: amountNum,
+      /* 分类和支付方式允许为空：AI 有时认不出，与其瞎猜一个，
+         不如留空等用户自己补。后端也允许 null。 */
       category: readChip('cat') || null,
       note: $('fNote').value.trim() || null,
       account: readChip('acct') || null,
@@ -1998,12 +2218,12 @@ $('save').onclick = async () => {
       });
       closeSheet();
       await load();
-      const od = occurred ? new Date(occurred) : null;
-      const now = new Date();
-      if (od && !isNaN(od.getTime()) &&
-          (od.getFullYear() !== now.getFullYear() || od.getMonth() !== now.getMonth())) {
-        /* 跨月要说清楚：首页只汇总本月，不然用户看金额没变会以为没记上 */
-        toast('已记入 ' + (od.getMonth() + 1) + '月' + od.getDate() + '日（非本月，首页汇总不变）');
+      /* 跨月要说清楚：首页只汇总本月，不然用户看金额没变会以为没记上。
+         比较也按北京时间 —— 判断的是「是不是这个月」，不是「设备认为现在是几月」 */
+      const op = occurred ? bjParts(occurred) : null;
+      const np2 = bjParts(Date.now());
+      if (op && (op.y !== np2.y || op.m !== np2.m)) {
+        toast('已记入 ' + (op.m + 1) + '月' + op.d + '日（非本月，首页汇总不变）');
       } else {
         toast('已保存');
       }
@@ -2024,29 +2244,32 @@ $('save').onclick = async () => {
 
 /* ================= 事件：删除（点记录弹出确认） ================= */
 function openDel(id) {
-  pendingDeleteId = id;
   /* 把要删的东西写清楚 —— 只写「这条记录」的话，点错行时根本不知道删的是哪笔 */
   const rec = records.find(r => String(r.id) === String(id));
-  const box = $('delDetail');
-  if (rec) {
-    const ic = iconFor(rec);
-    const isExp = rec.type !== 'income';
-    const bits = [];
-    if (rec.note) bits.push(rec.note);
-    if (rec.account) bits.push(rec.account);
-    const d = new Date(rec.occurred_at);
-    if (!isNaN(d.getTime())) bits.push((d.getMonth() + 1) + '月' + d.getDate() + '日');
-    box.innerHTML =
-      '<div class="ad-ic" style="color:' + ic.c + ';background:' + ic.c + '1E">' + ic.s + '</div>' +
-      '<div>' +
-        '<div class="ad-t">' + esc(rec.category || (isExp ? '支出' : '收入')) +
-          ' ' + (isExp ? '−' : '+') + money(rec.amount) + '</div>' +
-        (bits.length ? '<div class="ad-s">' + esc(bits.join(' · ')) + '</div>' : '') +
-      '</div>';
-    box.hidden = false;
-  } else {
-    box.hidden = true;
+  /* 找不到就别开弹层。原来这里会「安静地什么都发生」，
+     用户点了删除却毫无反应，只会以为是页面卡了然后反复点。
+     能走到这儿说明本地列表和实际状态已经不一致了，让用户刷新。 */
+  if (!rec) {
+    toast('这条记录已经不在了，刷新一下再看看', true);
+    return;
   }
+  pendingDeleteId = rec.id;
+  const box = $('delDetail');
+  const ic = iconFor(rec);
+  const isExp = rec.type !== 'income';
+  const bits = [];
+  if (rec.note) bits.push(rec.note);
+  if (rec.account) bits.push(rec.account);
+  const p = bjParts(rec.occurred_at);
+  if (p) bits.push((p.m + 1) + '月' + p.d + '日');
+  box.innerHTML =
+    '<div class="ad-ic" style="color:' + ic.c + ';background:' + ic.c + '1E">' + ic.s + '</div>' +
+    '<div>' +
+      '<div class="ad-t">' + esc(rec.category || (isExp ? '支出' : '收入')) +
+        ' ' + (isExp ? '−' : '+') + money(rec.amount) + '</div>' +
+      (bits.length ? '<div class="ad-s">' + esc(bits.join(' · ')) + '</div>' : '') +
+    '</div>';
+  box.hidden = false;
   $('delMask').classList.add('on');
   syncScrollLock();
 }
