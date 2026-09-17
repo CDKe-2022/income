@@ -1074,11 +1074,23 @@ function fmtShort(n) {
   n = Number(n) || 0;
   if (n >= 100000) return Math.round(n / 10000) + '万';
   if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+  /* 小于 1 的刻度（niceStep 现在会给 0.01~0.5）四舍五入成整数就全变 0 或 1，
+     一排网格线标着 "0 0 0 1" 等于没标。带小数位显示。 */
+  if (n > 0 && n < 1) return n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
   return String(Math.round(n));
 }
 function fmtPct(p) { return (p >= 99.95 ? 100 : p >= 10 ? p.toFixed(0) : p.toFixed(1)) + '%'; }
 function niceStep(maxV) {
-  const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000];
+  /* 步长从 0.01 起 —— 原来是 1 起。金额可以小到分（0.01 元），
+     一整个月只有一笔 0.01 元时，从 1 起步会算出 step=1、gridTop=1，
+     网格线只画得出顶部一根，柱子在图上几乎看不见（高 2.5px 的矮桩）。
+     加上小数步长，这种月也能正常出图。 */
+  const steps = [
+    0.01, 0.02, 0.05, 0.1, 0.2, 0.5,
+    1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000,
+    10000, 20000, 50000, 100000, 200000, 500000,
+  ];
+  if (!Number.isFinite(maxV) || maxV <= 0) return 1;   // 0 / 负数 / NaN / Infinity 都兜到这里
   for (const st of steps) if (maxV / st <= 3) return st;
   /* 兜底按数量级递推，而不是写死 —— 巨额数据下刻度也不会只剩一两根 */
   let st = 1000000;
@@ -1093,11 +1105,17 @@ function inMonth(d, y, m) {
   const p = bjParts(d);
   return !!p && p.y === y && p.m === m;
 }
+/* 当前「实际存在」的记录集：把本地隐藏掉的（先建后删失败的旧记录）滤掉。
+   列表渲染和所有统计都必须从这里取数 —— 有一处直接读 records 就会
+   和别处对不上。之前 render() 用 live、monthRecords() 自己再滤一遍，
+   两套并行逻辑，现在统一到这一个函数。 */
+function liveRecords() {
+  return droppedIds.size ? records.filter(r => !droppedIds.has(r.id)) : records;
+}
 function monthRecords(y, m) {
-  return records.filter(r => {
-    if (droppedIds.has(r.id)) return false;
-    return inMonth(recDate(r), y, m);
-  });
+  /* 只负责「按月份筛」，滤 droppedIds 的事交给 liveRecords ——
+     职责分开，免得同一个过滤条件在两处各写一遍 */
+  return liveRecords().filter(r => inMonth(recDate(r), y, m));
 }
 function monthKeyOf(y, m) { return y + '-' + pad(m + 1); }
 function hm(v) {
@@ -1306,8 +1324,10 @@ function render() {
   const curY = np.y, curM = np.m;
 
   /* 先滤掉「本地隐藏」的旧记录（先建后删失败的那条），
-     后面所有汇总、列表、统计都基于干净的数据，口径才一致 */
-  const live = droppedIds.size ? records.filter(r => !droppedIds.has(r.id)) : records;
+     后面所有汇总、列表、统计都基于干净的数据，口径才一致。
+     统一走 liveRecords()，别在这儿再手写一遍 filter —— 统计侧（monthRecords）
+     也是从同一个函数取数，两处才会永远一致。 */
+  const live = liveRecords();
 
   const mTitle = MN[curM] + '月';
   $('largeTitle').textContent = mTitle;
@@ -1316,22 +1336,30 @@ function render() {
 
   /* 本月汇总（按北京时间归属月份）。金额先转成「分」再累加 ——
      直接累加浮点会在几十上百笔后攒出 0.0000000001 这类尾差，
-     显示时再除回来，账面上永远是干净的分。 */
+     显示时再除回来，账面上永远是干净的分。
+
+     笔数口径：当月**所有**记录都算一笔，金额为 null 的也算。
+     金额为 null 的那条（AI 没认出来、等用户去补）确实进不了金额汇总，
+     但它是一条实实在在存在的记录，列表里画着、用户数得出来。
+     要是这里只算「有金额的」，就会出现「共 10 条」但「9 笔」——
+     两个数字对不上，看着像丢了一条。 */
   let expenseC = 0, incomeC = 0, monthCount = 0;
   live.forEach(r => {
     if (!inMonth(recDate(r), curY, curM)) return;
-    /* 金额可能是 null（AI 没认出来），Number(null)=0 会静默算成 0 元，
-       这里直接跳过，让它只出现在列表里等用户去补 */
+    monthCount++;
+    /* 但金额该跳过的还是要跳过：Number(null)=0 会把它静默算成 0 元，
+       比不算更糟 —— 那是个看起来正常的错数字。 */
     const c = toCents(r.amount);
     if (c === null) return;
     if (r.type === 'expense') expenseC += c;
     else incomeC += c;
-    monthCount++;
   });
 
   $('total').textContent = money(fromCents(expenseC));
   $('statIncome').textContent = money(fromCents(incomeC));
   $('statCount').textContent = monthCount + ' 笔';
+  /* 「共 N 条」是全部记录数，不是本月的 —— 和上面那个「N 笔」不是一回事，
+     所以文案要带「共」字区分开，别让人以为两个数该相等 */
   $('recordCount').textContent = '共 ' + live.length + ' 条';
 
   if (!live.length) {
@@ -1388,9 +1416,12 @@ function render() {
 function isFiniteNum(v) {
   return typeof v === 'number' ? Number.isFinite(v) : Number.isFinite(Number(v));
 }
-/* 一条记录至少要能认出来：有 id、有合法 type、金额是个有限数。
-   金额为 null（AI 没认出来）的记录要留下 —— 那是给人补的，不是垃圾。
-   但 null 混进统计会被 Number(null)=0 静默算成 0 元，统计侧要单独挡。 */
+/* 一条记录至少要能认出来：有 id、有合法 type。
+   **不看金额** —— 金额为 null（AI 没认出来）的记录要留下，
+   那是给人补的，不是垃圾。按调用方各自的语义决定怎么处理 null 金额：
+   render 里跳过金额累加但照算笔数，统计侧同理。
+   代价是 null 混进统计会被 Number(null)=0 静默算成 0 元，
+   所以所有金额累加处都必须先过 toCents 判 null。 */
 function validRecord(r) {
   if (!r || typeof r !== 'object') return false;
   if (r.id === null || r.id === undefined || r.id === '') return false;
@@ -1398,6 +1429,44 @@ function validRecord(r) {
   return true;
 }
 function safeArray(v) { return Array.isArray(v) ? v : []; }
+
+/* ================= 本地增删改（不重拉全量） =================
+   服务端排序是 occurred_at DESC, id DESC。本地改完数据必须维持同样的顺序，
+   否则「刚记的一笔」和「下次刷新后」位置会不一样，看着像自己跳了。
+   注意 id 可能一边是数字一边是字符串（服务端 JSON 给数字，本地可能拿的是
+   输入框字符串），比较时统一转字符串比，别用 < 直接比数字。 */
+function cmpRecords(a, b) {
+  const ta = String(a.occurred_at || '');
+  const tb = String(b.occurred_at || '');
+  if (ta !== tb) return ta < tb ? 1 : -1;          // 时间倒序
+  const ia = String(a.id), ib = String(b.id);
+  if (ia === ib) return 0;
+  return ia < ib ? 1 : -1;                          // 同秒按 id 倒序
+}
+function sortRecords() { records.sort(cmpRecords); }
+
+/* 新增：本地插一条，不重拉全量。
+   插完必须重排 —— 不能直接 unshift。列表是按时间倒序的，补记一笔上个月的账
+   时 unshift 会把它顶到 9 月记录上面，位置是错的。
+   返回插入的记录（拿不到 id 就返回 null，调用方据此决定要不要回退重拉）。 */
+function insertLocal(rec) {
+  if (!rec || rec.id === null || rec.id === undefined || rec.id === '') return null;
+  if (!validRecord(rec)) return null;
+  records.push(rec);
+  sortRecords();
+  return rec;
+}
+
+/* 编辑：原地替换。id 不变，所以只换字段，位置可能因为改了时间而变，重排一下。
+   找不到就返回 false —— 说明本地没有这条（可能别的设备删了），
+   调用方应该回退到重拉，而不是把改动凭空塞进列表。 */
+function replaceLocal(id, patch) {
+  const i = records.findIndex(r => String(r.id) === String(id));
+  if (i < 0) return false;
+  records[i] = Object.assign({}, records[i], patch);
+  sortRecords();
+  return true;
+}
 
 /* 翻页拉全量。原来一次要 1000 条，超了就只能「诚实地算不准」；
    现在按 500 一页翻，直到服务端说没有下一页。
@@ -1407,24 +1476,23 @@ const MAX_PAGES = 40; // 20000 条，够用很久了
 
 async function fetchRecords() {
   /* 每次加载都要清零 —— 上一次是截断的，不代表这一次也是。
-     忘了清零的话，某次截断之后警示条会一直挂着，再也消不掉。
-     降到 100 时的链路内累加仍然保留（见下）。 */
+     忘了清零的话，某次截断之后警示条会一直挂着，再也消不掉。 */
   dataTruncated = false;
 
-  let first;
-  try { first = await api('/api/records?limit=' + PAGE_SIZE); }
-  catch (e) {
-    /* 老版本后端不认这个 limit / 参数，退回小批量再试一次 */
-    first = await api('/api/records?limit=100');
-    dataTruncated = dataTruncated || !!(first && first.truncated);
-  }
-  dataTruncated = dataTruncated || !!(first && first.truncated);
+  /* 后端是本项目自带的，不存在「老版本不认 limit」的情况，所以不做参数降级。
+     原来这里是无条件 catch 后换 limit=100 重试 —— 那是坏的：如果第一个请求
+     是因为超时（20 秒）或 token 错而失败，第二个请求会原样再失败一次，
+     用户白等最长 40 秒，最后看到的还是同一个错。
+     「让错误更快地暴露出来」比「多试一次碰运气」重要。 */
+  const first = await api('/api/records?limit=' + PAGE_SIZE);
 
   const all = safeArray(first && first.data).filter(validRecord);
 
-  /* 服务端给了 has_more 就按它翻；没给（老版本）就看这一页有没有装满。
-     一直翻到「没有下一页」或撞上页数上限。 */
-  let more = first && typeof first.has_more === 'boolean'
+  /* has_more 是权威判据 —— 服务端直接告诉你「还有没有下一批」。
+     不要拿 truncated 当翻页依据：它的语义是「这一页装满了」，
+     恰好 500 条时它也是 true，会让人多翻一次空页。
+     只有服务端没给 has_more 时才退回到按「这页满没满」猜。 */
+  let more = typeof first.has_more === 'boolean'
     ? first.has_more
     : all.length >= PAGE_SIZE;
 
@@ -1434,12 +1502,13 @@ async function fetchRecords() {
     const batch = safeArray(res && res.data).filter(validRecord);
     if (!batch.length) break;               // 服务端说还有、但给不出东西，别死转
     all.push(...batch);
-    dataTruncated = dataTruncated || !!res.truncated;
     more = typeof res.has_more === 'boolean' ? res.has_more : batch.length >= PAGE_SIZE;
     page++;
   }
 
-  /* 撞上页数上限说明还没拉完，这时候必须让警示条亮起来 */
+  /* 撞上页数上限说明还没拉完，这时候必须让警示条亮起来。
+     判据用 more 而不是 truncated —— truncated 只看单页装没装满，
+     翻完最后一页时它仍然是 true（最后一页也是满的），会误报警示条。 */
   if (more && page >= MAX_PAGES) dataTruncated = true;
 
   return Object.assign({}, first, { data: all, truncated: dataTruncated });
@@ -1676,13 +1745,22 @@ function renderDaily(mr, y, m) {
   const W = 344, H = 128, TOP = 12, L = 36, R = 8, B = 18;
   const plotW = W - L - R, plotH = H - TOP - B;
   const step = niceStep(maxV);
-  const gridTop = Math.ceil(maxV / step) * step;
+  /* 用整数计数算读数，不要靠 gv += step 累加 —— step 现在可以是 0.01 这种
+     小数，累加会攒出 0.30000000000000004 的漂移。
+     ticks 是「几根线」，每根线的读数由 k * step 现算，从整数出发不累加。 */
+  const ticks = Math.max(1, Math.round(Math.ceil(maxV / step)));
+  /* ticks * step 在浮点下会出 0.30000000000000004 这种毛刺（0.1*3 的锅）。
+     它要当除数参与每个柱子的高度计算，留着会让所有柱子矮一丁点。
+     按步长的小数位数收敛回去 —— step 只可能来自上面那张固定表，
+     小数位最多 2 位，所以 round 到 2 位就够，不会误伤大数。 */
+  const gridTop = Number((ticks * step).toFixed(2));
   const yOf = v => TOP + plotH - (v / gridTop) * plotH;
   const slot = plotW / D;
   const bw = Math.min(16, Math.max(5, slot * 0.58));
 
   let s = '';
-  for (let gv = step; gv <= gridTop + 0.001; gv += step) {
+  for (let k = 1; k <= ticks; k++) {
+    const gv = k * step;
     const gy = yOf(gv);
     s += '<line class="gl" x1="' + L + '" x2="' + (W - R) + '" y1="' + fx(gy) + '" y2="' + fx(gy) + '"/>' +
          '<text class="ax" x="' + (L - 5) + '" y="' + fx(gy + 3) + '" text-anchor="end">' + fmtShort(gv) + '</text>';
@@ -1737,13 +1815,18 @@ function renderMonthly() {
   const W = 344, H = 128, TOP = 12, L = 36, R = 8, B = 18;
   const plotW = W - L - R, plotH = H - TOP - B;
   const step = niceStep(maxV);
-  const gridTop = Math.ceil(maxV / step) * step;
+  /* 和日柱状图同一套：整数计数算网格线，gridTop 收敛浮点毛刺。
+     两处图表都有一份刻度逻辑，改的时候必须一起改 ——
+     只改一处的话，小金额下一个月能画好、另一个月画不出来。 */
+  const ticks = Math.max(1, Math.round(Math.ceil(maxV / step)));
+  const gridTop = Number((ticks * step).toFixed(2));
   const yOf = v => TOP + plotH - (v / gridTop) * plotH;
   const groupW = plotW / 6;
   const bw = Math.min(13, groupW * 0.3);
 
   let s = '';
-  for (let gv = step; gv <= gridTop + 0.001; gv += step) {
+  for (let k = 1; k <= ticks; k++) {
+    const gv = k * step;
     const gy = yOf(gv);
     s += '<line class="gl" x1="' + L + '" x2="' + (W - R) + '" y1="' + fx(gy) + '" y2="' + fx(gy) + '"/>' +
          '<text class="ax" x="' + (L - 5) + '" y="' + fx(gy + 3) + '" text-anchor="end">' + fmtShort(gv) + '</text>';
@@ -2213,17 +2296,37 @@ $('save').onclick = async () => {
     if (editingId) {
       await saveEdit(payload);
       closeSheet();
-      /* silent：列表上本来就有内容，别切骨架屏。新数据回来原地替换。 */
-      await load({ silent: true });
+      /* 本地原地替换，不重拉全量。id 没变，改的就是这几个字段。
+         occurred_at 用发出去的原串 —— 它和服务端存的是同一个时刻的等价表示，
+         不必等回包。payload 里没带 occurred_at（时间框非法）就保留本地原值。 */
+      const prev = records.find(r => String(r.id) === String(editingId));
+      const patch = Object.assign({}, payload);
+      patch.occurred_at = occurred || (prev && prev.occurred_at);
+      const okLocal = replaceLocal(editingId, patch);
+      /* 本地没有这条（可能别的设备删了）。不能凭空虚塞，回退重拉对齐真相。 */
+      if (!okLocal) await load({ silent: true });
+      else render();
       toast('已更新');
     } else {
-      await api('/api/records', {
+      const created = await api('/api/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       closeSheet();
-      await load({ silent: true });
+      /* 后端返回了新建记录的 id，本地插一条就够，不用把整张表重拉一遍。
+         时间没给的话（occurred 为空）服务端会用「当前北京时间」，
+         本地也按同样规则补上，格式跟 payload 里那条保持一致
+         （nowLocal() 给的就是 'YYYY-MM-DDTHH:MM'，拼上 +08:00 即等价形式），
+         免得这条在本地排到最后去。 */
+      const rec = insertLocal(Object.assign({}, payload, {
+        id: created && created.id,
+        occurred_at: occurred || (nowLocal() + ':00+08:00'),
+      }));
+      /* 拿不到 id 就没法在本地安放这条记录（列表靠 id 定位、删除也要 id），
+         老实回退重拉，别硬塞一条没有 id 的假记录进列表。 */
+      if (!rec) await load({ silent: true });
+      else render();
       /* 跨月要说清楚：首页只汇总本月，不然用户看金额没变会以为没记上。
          比较也按北京时间 —— 判断的是「是不是这个月」，不是「设备认为现在是几月」 */
       const op = occurred ? bjParts(occurred) : null;
