@@ -1450,9 +1450,14 @@ async function fetchRecords() {
    就把新数据盖掉了。这里用「自增序号 + 只认最后一次」来防。 */
 let loadSeq = 0;
 
-async function load() {
+/* silent：原地换数据，不切骨架屏。
+   删一条记录后要重拉，但这时候屏幕上本来就有内容 —— 把它整个换成
+   「正在加载…」会闪一下，正是「点了删除卡住几秒」的观感来源之一。
+   有旧内容就先留着，新数据回来再原地替换。 */
+async function load(opts) {
+  const silent = !!(opts && opts.silent);
   const seq = ++loadSeq;
-  setLoading();
+  if (!silent) setLoading();
   $('refresh').classList.add('spin');
   try {
     const res = await fetchRecords();
@@ -2208,7 +2213,8 @@ $('save').onclick = async () => {
     if (editingId) {
       await saveEdit(payload);
       closeSheet();
-      await load();
+      /* silent：列表上本来就有内容，别切骨架屏。新数据回来原地替换。 */
+      await load({ silent: true });
       toast('已更新');
     } else {
       await api('/api/records', {
@@ -2217,7 +2223,7 @@ $('save').onclick = async () => {
         body: JSON.stringify(payload),
       });
       closeSheet();
-      await load();
+      await load({ silent: true });
       /* 跨月要说清楚：首页只汇总本月，不然用户看金额没变会以为没记上。
          比较也按北京时间 —— 判断的是「是不是这个月」，不是「设备认为现在是几月」 */
       const op = occurred ? bjParts(occurred) : null;
@@ -2231,7 +2237,9 @@ $('save').onclick = async () => {
   } catch (e) {
     if (e.partial) {
       closeSheet();
-      await load();
+      /* 这条是「先建后删」只成功了一半，本地状态是脏的，必须重拉；
+         但屏幕上还有旧内容，仍然静默刷新，不要闪。 */
+      await load({ silent: true });
       toast(e.message, true);
     } else {
       $('formMsg').textContent = (editingId ? '更新失败：' : '保存失败：') + e.message;
@@ -2305,13 +2313,32 @@ $('delConfirm').onclick = async () => {
   $('delConfirm').disabled = true;
   try {
     await api('/api/records?id=' + encodeURIComponent(id), { method: 'DELETE' });
+
+    /* 删完不再整表重拉。
+       原来是 await load()，而 load() 会把全部记录重新拉一遍 —— 记录多了就是
+       好几次往返，一次删一条等两三秒，观感像卡死。
+       但删除成功后这条记录一定不在了，从本地数组摘掉再渲染一次就够，
+       一次网络都不用，数字（本月支出等汇总本来就是本地算的）当场就对。
+
+       唯一的风险：后端返回了 200 却没真删。不赌这个 —— 下面的 catch 里
+       会退回去重拉一次，把本地状态拉回真相。 */
     closeDel();
     closeSheet();
-    await load();
+
+    const i = records.findIndex(r => String(r.id) === String(id));
+    if (i >= 0) records.splice(i, 1);
+    /* 这条已经删了，本地隐藏标记里留着它就是死数据，顺手清掉 */
+    droppedIds.delete(id);
+    render();
     toast('已删除');
   } catch (err) {
     closeDel();
     toast('删除失败：' + err.message, true);
+    /* 失败时不知道服务端到底删没删（可能是超时，其实删成功了；也可能是
+       接口报错，根本没删）。本地摘掉是「假设成功」，这里不能猜，
+       老老实实重拉一次，让界面反映真实状态。这时切骨架屏反而是对的 ——
+       它表示「我在重新确认」。 */
+    load().catch(() => {});
   } finally {
     $('delConfirm').disabled = false;
   }
