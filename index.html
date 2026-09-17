@@ -201,6 +201,7 @@
     <input id="cfgApi" placeholder="API 地址，例如 https://ledger-api.xxx.workers.dev" autocapitalize="off" autocorrect="off" spellcheck="false" data-page-node-id="AkGKY1If2ZU0t1XdEDFt2a">
     <input id="cfgToken" placeholder="API Token" autocapitalize="off" autocorrect="off" spellcheck="false" data-page-node-id="53eV9EismfbUHKZhKelj9w">
     <button class="block" id="cfgSave" data-page-node-id="3BIFxfPL8TW73qS9IXE7mV">保存并加载</button>
+    <button class="block ghost" id="copyLink" style="display:none">复制我的专属链接</button>
     <div class="msg" id="cfgMsg" data-page-node-id="45JlTqR2MfXwMFItI9TDi6"></div>
   </div>
 
@@ -247,6 +248,23 @@ function loadCfg() {
 }
 function saveCfg(c) { localStorage.setItem(LS_KEY, JSON.stringify(c)); }
 
+/* 支持用带参数的链接一次配好，例如：
+   https://xxx.pages.dev/#api=https://yyy.workers.dev&token=abcdef
+   参数写进本地存储后立刻从地址栏抹掉。 */
+(function autoConfigFromUrl() {
+  const fromHash = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const fromQuery = new URLSearchParams(location.search);
+  const api = fromHash.get('api') || fromQuery.get('api');
+  const token = fromHash.get('token') || fromQuery.get('token');
+  if (!api && !token) return;
+  const cur = loadCfg() || {};
+  const next = { api: api || cur.api || '', token: token || cur.token || '' };
+  if (next.api && next.token) {
+    saveCfg(next);
+    history.replaceState(null, '', location.pathname);
+  }
+})();
+
 function money(n) {
   return '¥' + Number(n).toFixed(2);
 }
@@ -280,6 +298,12 @@ function showSetup(msg, isErr) {
     $('cfgApi').value = cfg.api || '';
     $('cfgToken').value = cfg.token || '';
   }
+  $('copyLink').style.display = (cfg && cfg.api && cfg.token) ? '' : 'none';
+}
+
+function setupLink(c) {
+  return location.origin + location.pathname +
+    '#api=' + encodeURIComponent(c.api) + '&token=' + encodeURIComponent(c.token);
 }
 
 async function load() {
@@ -338,6 +362,19 @@ function esc(s) {
 }
 
 /* ---------- 事件 ---------- */
+$('copyLink').onclick = async () => {
+  const c = loadCfg();
+  if (!c || !c.api || !c.token) return;
+  const link = setupLink(c);
+  try {
+    await navigator.clipboard.writeText(link);
+    $('cfgMsg').textContent = '已复制。存成书签或发给自己，换设备直接点开，不用再输。';
+    $('cfgMsg').className = 'msg';
+  } catch {
+    window.prompt('手动复制这条链接：', link);
+  }
+};
+
 $('cfgSave').onclick = async () => {
   const apiUrl = $('cfgApi').value.trim();
   const token = $('cfgToken').value.trim();
