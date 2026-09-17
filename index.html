@@ -2,7 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- user-scalable=no + maximum-scale=1 挡住双指缩放；iOS Safari 从 10 版起
+     会忽略这两个值，所以还要靠 JS 拦 gesturestart，以及下面的 touch-action -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
@@ -47,6 +49,10 @@
     }
   }
   html, body { margin: 0; padding: 0; }
+  /* 双指缩放与双击缩放都挡掉，让它更接近原生 App。
+     pan-x pan-y 保留单指滚动，pinch-zoom 不给 —— 这是禁双指缩放的
+     标准做法，配合上面的 viewport 一起生效。 */
+  html { touch-action: pan-x pan-y; }
   body {
     background: var(--bg);
     color: var(--label);
@@ -55,7 +61,10 @@
     line-height: 1.45;
     padding-bottom: calc(110px + env(safe-area-inset-bottom));
     -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
   }
+  /* 图表、芯片这类不该被手势干扰的区域，单独锁死 touch-action */
+  .chart-svg, .donut-box, .chips, .seg, .type-seg { touch-action: pan-x pan-y; }
   [hidden] { display: none !important; }
   button { font: inherit; cursor: pointer; }
   input {
@@ -194,7 +203,7 @@
   /* ============ 统计视图 ============ */
   .month-nav {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 4px 0 14px;
+    padding: 4px 0 6px;
   }
   .m-btn {
     width: 38px; height: 38px; border: none; border-radius: 50%;
@@ -205,6 +214,27 @@
   .m-btn:disabled { color: var(--label-3); }
   .m-btn svg { width: 20px; height: 20px; }
   .m-label { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  /* 翻离本月后出现的小胶囊，点了回本月 */
+  .m-back {
+    display: block; margin: 0 auto 12px;
+    height: 28px; padding: 0 14px;
+    border: none; border-radius: 999px;
+    background: var(--fill); color: var(--blue);
+    font-size: 13px; font-weight: 500;
+  }
+  .m-back:active { opacity: .6; }
+
+  /* 某月没有任何记录时，图表区统一用它占位 */
+  .month-empty {
+    background: var(--card);
+    border-radius: 18px;
+    padding: 28px 16px;
+    text-align: center;
+    color: var(--label-2); font-size: 14px;
+    box-shadow: var(--card-edge);
+    margin-bottom: 12px;
+  }
+  .month-empty svg { width: 34px; height: 34px; color: var(--label-3); display: block; margin: 0 auto 10px; }
 
   .stat-cards {
     display: grid; grid-template-columns: repeat(3, 1fr);
@@ -697,7 +727,9 @@
     </div>
 
     <div class="month-nav">
-      <button class="m-btn" id="mPrev" aria-label="上个月" disabled>
+      <!-- 初始不给 disabled：真正的禁用状态由 updateMonthNav 决定，
+           写死 disabled 会让首帧短暂点不动 -->
+      <button class="m-btn" id="mPrev" aria-label="上个月">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <div class="m-label" id="mLabel">--</div>
@@ -705,6 +737,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
     </div>
+    <!-- 翻离本月后出现，一键回本月 -->
+    <button class="m-back" id="mBack" type="button" hidden>回到本月</button>
 
     <div class="stat-cards">
       <div class="stat-chip"><div class="sc-label">支出</div><div class="sc-val" id="stExp">--</div></div>
@@ -712,7 +746,10 @@
       <div class="stat-chip"><div class="sc-label">结余</div><div class="sc-val" id="stBal">--</div></div>
     </div>
 
-    <div class="chart-card">
+    <!-- 该月无记录时的占位，由 renderStats 控制显隐 -->
+    <div class="month-empty" id="monthEmpty" hidden></div>
+
+    <div class="chart-card" id="donutCard">
       <div class="cc-head">分类占比<span class="cc-sub">点按分类查看</span></div>
       <div class="donut-box" id="donutBox">
         <svg viewBox="0 0 200 200" role="img" aria-label="本月支出分类占比图"></svg>
@@ -721,12 +758,12 @@
       <div id="donutLegend"></div>
     </div>
 
-    <div class="chart-card">
+    <div class="chart-card" id="dailyCard">
       <div class="cc-head">每日支出<span class="cc-sub" id="dailyCap"></span></div>
       <div id="dailyBox"></div>
     </div>
 
-    <div class="chart-card">
+    <div class="chart-card" id="monthlyCard">
       <div class="cc-head">近 6 个月<span class="cc-sub"><i class="dot e"></i>支出<i class="dot i"></i>收入</span></div>
       <div id="monthlyBox"></div>
       <div class="chart-cap" id="monCap"></div>
@@ -852,6 +889,53 @@
 <div class="toast" id="toast" role="status"></div>
 
 <script>
+/* ================= 禁用手势缩放 =================
+   viewport 的 user-scalable=no 在新版 iOS Safari 上会被忽略，得从事件层兜。
+   三条路都要堵：双指捏合(gesturestart/change/end)、双击放大、以及
+   Safari 的双指缩放(gesture*)。全部 preventDefault。 */
+['gesturestart', 'gesturechange', 'gestureend'].forEach(function (type) {
+  document.addEventListener(type, function (e) { e.preventDefault(); }, { passive: false });
+});
+
+/* 双击缩放：iOS 上双击会触发缩放。用一个 300ms 内的连续两次 touchend 判定，
+   真命中就 preventDefault。注意别把正常的单击/双击交互误伤 ——
+   只在两次点击间隔极短且位置几乎相同时才拦。 */
+let lastTap = 0;
+let lastTapX = 0, lastTapY = 0;
+document.addEventListener('touchend', function (e) {
+  /* 落在输入框上的点击不管，免得影响选词/光标 */
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  const now = Date.now();
+  const t = e.changedTouches && e.changedTouches[0];
+  if (!t) return;
+  const dx = Math.abs(t.clientX - lastTapX);
+  const dy = Math.abs(t.clientY - lastTapY);
+  /* 300ms 内、位移小于 30px，判为双击 → 拦掉 */
+  if (now - lastTap < 300 && dx < 30 && dy < 30) {
+    e.preventDefault();
+    lastTap = 0;
+  } else {
+    lastTap = now;
+    lastTapX = t.clientX;
+    lastTapY = t.clientY;
+  }
+}, { passive: false });
+
+/* 双指触摸直接拦 —— 有些安卓浏览器不走 gesture* 事件 */
+document.addEventListener('touchmove', function (e) {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+/* 双指按下也拦：避免 iOS 从"双指"进入缩放态 */
+document.addEventListener('touchstart', function (e) {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+/* 桌面浏览器 Ctrl+滚轮缩放也顺手挡掉，保持体验一致 */
+document.addEventListener('wheel', function (e) {
+  if (e.ctrlKey) e.preventDefault();
+}, { passive: false });
+
 /* ================= 配置与状态 ================= */
 const LS_KEY = 'ledger_cfg_v1';
 let cfg = null;
@@ -1227,14 +1311,23 @@ function shiftMonth(delta) {
 
 function updateMonthNav() {
   const cur = new Date();
+
+  /* 下个月：只在「当前月」禁用 —— 不让翻到未来。
+     上个月：只要账本里有任何一条记录就不禁用。
+     原来用的是「看有没有比当前查看月份更早的记录」，那个判据是坏的：
+     翻到最早那个月之后 mPrev 就被禁死，再也回不去；
+     账本为空时更是两个箭头全禁，用户会以为坏了。
+     翻月本就是自由浏览，有没有数据是翻过去才知道的事。 */
   $('mNext').disabled = statYm.y === cur.getFullYear() && statYm.m === cur.getMonth();
-  let earlier = false;
-  for (const r of records) {
-    const d = recDate(r);
-    if (!isNaN(d.getTime()) && (d.getFullYear() < statYm.y || (d.getFullYear() === statYm.y && d.getMonth() < statYm.m))) { earlier = true; break; }
-  }
-  $('mPrev').disabled = !earlier;
+  $('mPrev').disabled = records.length === 0;
+
   $('mLabel').textContent = statYm.y + '年' + (statYm.m + 1) + '月';
+
+  /* 翻离本月后给一个「回到本月」的入口，翻远了能一键回来 */
+  const back = $('mBack');
+  if (back) {
+    back.hidden = (statYm.y === cur.getFullYear() && statYm.m === cur.getMonth());
+  }
 }
 
 function renderStats() {
@@ -1251,6 +1344,27 @@ function renderStats() {
     warn.hidden = true;
   }
 
+  /* 这个月一条记录都没有：摘要卡照常显示 0，图表区换成一句明确的话。
+     不给图表的话用户只会看到空白，会以为页面坏了或箭头没生效。 */
+  const emptyEl = $('monthEmpty');
+  if (!mr.length) {
+    emptyEl.hidden = false;
+    emptyEl.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>' +
+        '<line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' +
+      '</svg>' +
+      (y + '年' + (m + 1) + '月没有记录');
+  } else {
+    emptyEl.hidden = true;
+  }
+
+  /* 图表区随月份有无数据一起显隐 */
+  ['donutCard', 'dailyCard', 'monthlyCard'].forEach(function (id) {
+    const el = $(id);
+    if (el) el.hidden = !mr.length;
+  });
+
   /* 摘要卡 */
   let exp = 0, inc = 0;
   mr.forEach(r => { if (r.type === 'income') inc += Number(r.amount); else exp += Number(r.amount); });
@@ -1260,6 +1374,12 @@ function renderStats() {
   const balEl = $('stBal');
   balEl.textContent = (bal < 0 ? '−' : '+') + money(Math.abs(bal));
   balEl.className = 'sc-val' + (bal > 0 ? ' pos' : bal < 0 ? ' neg' : '');
+
+  if (!mr.length) {
+    /* 没数据就不用画图了，跳过后面全部渲染 —— 但仍要更新月份导航 */
+    updateMonthNav();
+    return;
+  }
 
   /* 分类占比（支出） */
   const catMap = new Map();
@@ -1452,6 +1572,12 @@ $('viewSeg').onclick = (e) => {
 };
 $('mPrev').onclick = () => shiftMonth(-1);
 $('mNext').onclick = () => shiftMonth(1);
+$('mBack').onclick = () => {
+  const n = new Date();
+  statYm = { y: n.getFullYear(), m: n.getMonth() };
+  selCat = null; selDay = null; selMon = null;
+  renderStats();
+};
 
 function toggleCat(name) { selCat = selCat === name ? null : name; renderStats(); }
 $('donutBox').onclick = (e) => {
