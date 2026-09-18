@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
+<html lang="zh-CN" data-page-node-id="mye8eJSQY4V8ln9JDIwqpq">
+<head data-page-node-id="zS3jAlraPCuxaTfJ54OVuY">
+<meta charset="UTF-8" data-page-node-id="k2JYUajEaTzCfdPoAQQTqD">
 <!-- user-scalable=no + maximum-scale=1 挡住双指缩放；iOS Safari 从 10 版起
      会忽略这两个值，所以还要靠 JS 拦 gesturestart，以及下面的 touch-action -->
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="账本">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" data-page-node-id="KZDWvkzP3A8S0Mfi6G2vXg">
+<meta name="color-scheme" content="light dark" data-page-node-id="3H5A4HhfVDuF6D2GsWbSDM">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7" data-page-node-id="mJVMq59g8L6GE1kL31RqYI">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" data-page-node-id="8mdnpHtVfx5DilnPsaWE9g">
+<meta name="apple-mobile-web-app-capable" content="yes" data-page-node-id="H7syOu4kMZb733j1AxgLgH">
+<meta name="apple-mobile-web-app-status-bar-style" content="default" data-page-node-id="h9PwHTIhiDPS49i4Av1mSZ">
+<meta name="apple-mobile-web-app-title" content="账本" data-page-node-id="5jx0JuFymGFhgZtGjItoDA">
 <title>账本</title>
 <style>
   /* ============ 基础 ============ */
@@ -118,8 +118,9 @@
     font-size: 32px; font-weight: 700; letter-spacing: -.5px;
     margin: 0; padding: 8px 4px 0;
   }
-  .hero { padding: 20px 4px 4px; }
+  .hero { padding: 20px 4px 4px; cursor: pointer; }
   .hero-label { font-size: 15px; color: var(--label-2); }
+  .hero-link { color: var(--blue); font-size: 12.5px; margin-left: 8px; }
   .hero-amount {
     font-size: clamp(38px, 11vw, 46px);
     font-weight: 700; letter-spacing: -1px; line-height: 1.15;
@@ -681,6 +682,86 @@
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.err { background: rgba(210, 55, 42, .92); }
 
+  /* ============ 明细页搜索 / 筛选 ============ */
+  .search-bar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card);
+    border-radius: 18px;
+    box-shadow: var(--card-edge);
+    height: 44px; padding: 0 14px;
+  }
+  .search-bar svg { width: 16px; height: 16px; color: var(--label-3); flex-shrink: 0; }
+  .search-bar input { flex: 1; min-width: 0; font-size: 15px; }
+  .search-clear {
+    flex-shrink: 0; height: 26px; padding: 0 10px;
+    border: none; border-radius: 999px;
+    background: var(--fill); color: var(--label-2);
+    font-size: 12px;
+  }
+  .search-clear:active { background: var(--press); }
+  .filter-chips {
+    display: flex; gap: 8px;
+    overflow-x: auto; overflow-y: hidden;
+    padding: 10px 2px 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-chips::-webkit-scrollbar { display: none; }
+  .f-chip {
+    flex: 0 0 auto; height: 30px; padding: 0 13px;
+    border: none; border-radius: 999px;
+    background: var(--card); color: var(--label-2);
+    font-size: 13px;
+    box-shadow: 0 0 0 .5px var(--sep);
+    transition: background .15s, color .15s;
+  }
+  .f-chip:active { opacity: .6; }
+  .f-chip.on { background: var(--label); color: var(--bg); font-weight: 600; box-shadow: none; }
+
+  /* ============ 预算进度条 ============ */
+  .budget { margin: 12px 4px 0; }
+  .budget-top {
+    display: flex; justify-content: space-between;
+    font-size: 12.5px; color: var(--label-2);
+    margin-bottom: 6px;
+  }
+  .budget-top b { color: var(--label); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .budget-track {
+    height: 8px; border-radius: 4px;
+    background: var(--fill); overflow: hidden;
+  }
+  .budget-fill {
+    height: 100%; width: 0; border-radius: 4px;
+    background: var(--blue);
+    transition: width .4s ease, background .2s;
+  }
+  .budget-fill.warn { background: #FF9500; }
+  .budget-fill.over { background: var(--red); }
+
+  /* ============ 环比提示 ============ */
+  .hero-trend {
+    font-size: 13px; color: var(--label-2);
+    margin-top: 5px; font-variant-numeric: tabular-nums;
+  }
+  .hero-trend b.up { color: var(--red); font-weight: 600; }
+  .hero-trend b.down { color: var(--green); font-weight: 600; }
+  .hero-trend .trend-sub { color: var(--label-3); margin-left: 4px; }
+
+  /* ============ 本月看点（统计页洞察） ============ */
+  .insight-row {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 8px 2px;
+    font-size: 13.5px; line-height: 1.5;
+  }
+  .insight-row + .insight-row { box-shadow: 0 .5px 0 var(--sep); }
+  .insight-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--blue); margin-top: 6px; flex-shrink: 0;
+  }
+  .insight-row .hl { font-weight: 600; }
+  .insight-row .hl.bad { color: var(--red); }
+  .insight-row .hl.ok { color: var(--green); }
+
   /* ============ 无障碍 / 减弱动效 ============ */
   button:focus-visible, .item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
   @media (prefers-reduced-motion: reduce) {
@@ -688,211 +769,244 @@
   }
 </style>
 </head>
-<body>
+<body data-page-node-id="My4A2UAg4lSnAWkA3lE024">
 
 <!-- 顶部导航：滚动后浮现毛玻璃与小标题 -->
-<nav class="nav" id="nav" hidden>
-  <div class="nav-title" id="navTitle">账本</div>
-  <div class="nav-actions">
-    <button class="icon-btn" id="refresh" aria-label="刷新数据">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+<nav class="nav" id="nav" hidden data-page-node-id="NtWPQ2vPQTqZkoJNzG9bM9">
+  <div class="nav-title" id="navTitle" data-page-node-id="aUuXYZyXbrTekuc0Irf92n">账本</div>
+  <div class="nav-actions" data-page-node-id="vQeYRB5vnGmcD7clbf6rIj">
+    <button class="icon-btn" id="refresh" aria-label="刷新数据" data-page-node-id="D3xLEtc3IdgTcEbKjtwgjx">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="5ydn6XROtlXyNYibR64OAd"><polyline points="23 4 23 10 17 10" data-page-node-id="qaagnMRzhfdWd59jt70GRJ"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" data-page-node-id="Bg0lODE8C11NqaWLudi7bb"/></svg>
     </button>
-    <button class="icon-btn" id="resetting" aria-label="设置">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <button class="icon-btn" id="resetting" aria-label="设置" data-page-node-id="dDWOO7RDs2G3N12FZSb7YN">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="Y55AQmleAFWlvBcdfGJVWT"><circle cx="12" cy="12" r="3" data-page-node-id="3GS8QISzBsG19hbU1uRSIU"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" data-page-node-id="lvO6b78EZhZ7xfD6AvCNk3"/></svg>
     </button>
   </div>
 </nav>
 
 <!-- 主页 -->
-<div class="wrap page" id="main" hidden>
-  <h1 class="large-title" id="largeTitle">账本</h1>
+<div class="wrap page" id="main" hidden data-page-node-id="oCxxDzHAGgmMDmjVPPDvII">
+  <h1 class="large-title" id="largeTitle" data-page-node-id="cMnWhfrydW7FHDVbrV8d16">账本</h1>
 
-  <div class="page-seg" id="viewSeg">
-    <button class="on" data-view="list" type="button">明细</button>
-    <button data-view="stats" type="button">统计</button>
+  <div class="page-seg" id="viewSeg" data-page-node-id="lR03QWyDT0gozrPBAo3kTi">
+    <button class="on" data-view="list" type="button" data-page-node-id="BrmhjZjCdgTl0wDD12H1gE">明细</button>
+    <button data-view="stats" type="button" data-page-node-id="XEaolOV1SxZhLLFZTJaLGJ">统计</button>
   </div>
 
-  <div id="viewList">
-    <section class="hero">
-      <div class="hero-label">本月支出</div>
-      <div class="hero-amount" id="total" aria-live="polite">¥ --</div>
-      <div class="hero-sub">收入 <b id="statIncome">--</b> · 本月 <b id="statCount">--</b></div>
+  <div id="viewList" data-page-node-id="8jExafyNnnx2XtabI4tbdE">
+    <section class="hero" id="heroCard" title="点按查看支出构成" data-page-node-id="AIb2xl7zHxC5s7V0yJ5DMF">
+      <div class="hero-label" data-page-node-id="Z9ho3YFniUHMNHS81Bk74Z">本月支出<span class="hero-link" data-page-node-id="Bi5xCM3sAcVup0QVrBsRVd">构成 ›</span></div>
+      <div class="hero-amount" id="total" aria-live="polite" data-page-node-id="PSjBfX11BqEjl9luFqeeZf">¥ --</div>
+      <div class="hero-sub" data-page-node-id="KZw4WUX7xJ4kt3c4BUlZkO">收入 <b id="statIncome" data-page-node-id="dscVVnOQKeeHrPAIKFimjn">--</b> · 本月 <b id="statCount" data-page-node-id="K8uHpZ0CDZQyAsEAGOYnRh">--</b></div>
+      <div class="hero-trend" id="statTrend" hidden data-page-node-id="KhksOMic0GCCQKJjBYNTCd"></div>
+      <div class="budget" id="budgetBox" hidden data-page-node-id="OH872dbIkIkotAOosGt1Vf">
+        <div class="budget-top" data-page-node-id="VzyzFyBwi7owQgZJE4C7Bu"><span data-page-node-id="1GWHUHmwbwXHe3alV5zXTJ">月度预算</span><span id="budgetText" data-page-node-id="f2KzMwuR97gRAatnmED63F"></span></div>
+        <div class="budget-track" data-page-node-id="P2MRwqWE8m63okXauxDTEF"><div class="budget-fill" id="budgetFill" data-page-node-id="AHK1vaJUovBZb5qck8FAim"></div></div>
+      </div>
     </section>
 
-    <div class="section-head">
-      <span>最近记录</span>
-      <span id="recordCount"></span>
+    <div class="search-bar" data-page-node-id="ODQaaCwjEd1at8YVXyjt91">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="RXwgtQ1c0firylvZFPcupq"><circle cx="11" cy="11" r="7" data-page-node-id="tUfEBB1JGedGCzHvQr8vjs"/><line x1="21" y1="21" x2="16.5" y2="16.5" data-page-node-id="Ly39sMBNr1Nxds7UlXjcVt"/></svg>
+      <input id="searchInput" placeholder="搜备注、分类、金额…" autocomplete="off" data-page-node-id="oWqU01xpS31xQTHawOJGWu">
+      <button class="search-clear" id="searchClear" type="button" hidden data-page-node-id="hgyFGDjP8QxoMvYIuwV1D4">清除</button>
     </div>
-    <div id="list"></div>
+    <div class="filter-chips" id="filterChips" data-page-node-id="DWTCLf0GHmftzGG2xG6YRF"></div>
+
+    <div class="section-head" data-page-node-id="zCgkhwSeO2DhWJ6WGBkvhU">
+      <span data-page-node-id="xrsqsC3jm6I4UKVpek3ku5">最近记录</span>
+      <span id="recordCount" data-page-node-id="PViWTJuy20H8cJcR7Lxaqe"></span>
+    </div>
+    <div id="list" data-page-node-id="KCIHVb2HFHPc5WcdC8wV4T"></div>
   </div>
 
-  <div id="viewStats" hidden>
-    <div class="warn-bar" id="truncWarn" hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      <div id="truncWarnText"></div>
+  <div id="viewStats" hidden data-page-node-id="0LijE4FY7Rd4y965r0S4f4">
+    <div class="warn-bar" id="truncWarn" hidden data-page-node-id="POtjc3f2495mG5soPTmhaH">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="9Ygbwu83vB1aXFHzjVZtpB"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" data-page-node-id="TpYKuX5uhoJ7LFZmApEO5g"/><line x1="12" y1="9" x2="12" y2="13" data-page-node-id="ifFD78EFTXq3PtirNGLyz3"/><line x1="12" y1="17" x2="12.01" y2="17" data-page-node-id="vFuKKwV9fvCBa9zcGGjwwz"/></svg>
+      <div id="truncWarnText" data-page-node-id="qcUHg7lutbCJbgqUMFjB0v"></div>
     </div>
 
-    <div class="month-nav">
+    <div class="month-nav" data-page-node-id="71j9EppX7I7W8HiRBNQz58">
       <!-- 初始不给 disabled：真正的禁用状态由 updateMonthNav 决定，
            写死 disabled 会让首帧短暂点不动 -->
-      <button class="m-btn" id="mPrev" aria-label="上个月">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <button class="m-btn" id="mPrev" aria-label="上个月" data-page-node-id="oXEsjYHr1PU7GsiCj0KNOh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="2yCXUbhkK3CeHUxs4hKqLV"><polyline points="15 18 9 12 15 6" data-page-node-id="d1LMmT08VqwVj2PnF4yk90"/></svg>
       </button>
-      <div class="m-label" id="mLabel">--</div>
-      <button class="m-btn" id="mNext" aria-label="下个月" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <div class="m-label" id="mLabel" data-page-node-id="ZMzbewLqm4PYz5DGHpWGJb">--</div>
+      <button class="m-btn" id="mNext" aria-label="下个月" disabled data-page-node-id="5TZ6yNJiYNR9OlNxcrJEGu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="SkrXARqdJG0UKVcs9jBXcb"><polyline points="9 18 15 12 9 6" data-page-node-id="qq94ZExqYoTl6LLyubFQ8O"/></svg>
       </button>
     </div>
     <!-- 翻离本月后出现，一键回本月 -->
-    <button class="m-back" id="mBack" type="button" hidden>回到本月</button>
+    <button class="m-back" id="mBack" type="button" hidden data-page-node-id="FEGD3lU6slDi6Lmy5wUm9B">回到本月</button>
 
-    <div class="stat-cards">
-      <div class="stat-chip"><div class="sc-label">支出</div><div class="sc-val" id="stExp">--</div></div>
-      <div class="stat-chip"><div class="sc-label">收入</div><div class="sc-val pos" id="stInc">--</div></div>
-      <div class="stat-chip"><div class="sc-label">结余</div><div class="sc-val" id="stBal">--</div></div>
+    <div class="stat-cards" data-page-node-id="8bNXC9WHjyjvsrdnwtsIvA">
+      <div class="stat-chip" data-page-node-id="11AbEakGWCmUA0oaoDoDrO"><div class="sc-label" data-page-node-id="ruTFxXLAJIGdvxmFyiZ6M9">支出</div><div class="sc-val" id="stExp" data-page-node-id="dCsFi7QDmXqN8GO3E22u4F">--</div></div>
+      <div class="stat-chip" data-page-node-id="7LBvtz0ISNCPwZY6AY62p5"><div class="sc-label" data-page-node-id="gBVuHhnqK7WzZB7OHOYIqs">收入</div><div class="sc-val pos" id="stInc" data-page-node-id="tIL2Gtj1Ljj49MkCb4qaeD">--</div></div>
+      <div class="stat-chip" data-page-node-id="zzxWCw3upG3h4UjE61bim2"><div class="sc-label" data-page-node-id="75HKP1mPTv1QHO3s5AZXgy">结余</div><div class="sc-val" id="stBal" data-page-node-id="3xgvuzaTsZWo38UcuRP8nT">--</div></div>
     </div>
 
     <!-- 该月无记录时的占位，由 renderStats 控制显隐 -->
-    <div class="month-empty" id="monthEmpty" hidden></div>
+    <div class="month-empty" id="monthEmpty" hidden data-page-node-id="RbSPoOy9tIeHnELRoV9G6f"></div>
 
-    <div class="chart-card" id="donutCard">
-      <div class="cc-head">分类占比<span class="cc-sub">点按分类查看</span></div>
-      <div class="donut-box" id="donutBox">
-        <svg viewBox="0 0 200 200" role="img" aria-label="本月支出分类占比图"></svg>
-        <div class="donut-center" id="donutCenter"></div>
+    <!-- 本月看点：最大单笔、分类环比异常等一句话洞察 -->
+    <div class="chart-card" id="insightCard" hidden>
+      <div class="cc-head" id="insightTitle">本月看点</div>
+      <div id="insightList"></div>
+    </div>
+
+    <div class="chart-card" id="donutCard" data-page-node-id="3fugEk9xOFGArIbGrnoBdf">
+      <div class="cc-head" data-page-node-id="L9DlnQvXQXsPdOH42AMIsi">分类占比<span class="cc-sub" data-page-node-id="GWElBYzRug4l9GOBa5tNu0">点按分类查看</span></div>
+      <div class="donut-box" id="donutBox" data-page-node-id="EiI3waIiPUqbuRHwz6c54a">
+        <svg viewBox="0 0 200 200" role="img" aria-label="本月支出分类占比图" data-page-node-id="zR025YxnGsbdUL19nemMRE"></svg>
+        <div class="donut-center" id="donutCenter" data-page-node-id="cKMyDJnwDfEuj7tfi88Gnk"></div>
       </div>
-      <div id="donutLegend"></div>
+      <div id="donutLegend" data-page-node-id="iMiWWFhzCTq6CdJ3KPqWJ1"></div>
     </div>
 
-    <div class="chart-card" id="dailyCard">
-      <div class="cc-head">每日支出<span class="cc-sub" id="dailyCap"></span></div>
-      <div id="dailyBox"></div>
+    <!-- 收入构成：和支出占比同款交互，当月有收入才显示 -->
+    <div class="chart-card" id="incCard" hidden>
+      <div class="cc-head">收入构成<span class="cc-sub">点按分类查看</span></div>
+      <div class="donut-box" id="incBox">
+        <svg viewBox="0 0 200 200" role="img" aria-label="本月收入构成图"></svg>
+        <div class="donut-center" id="incCenter"></div>
+      </div>
+      <div id="incLegend"></div>
     </div>
 
-    <div class="chart-card" id="monthlyCard">
-      <div class="cc-head">近 6 个月<span class="cc-sub"><i class="dot e"></i>支出<i class="dot i"></i>收入</span></div>
-      <div id="monthlyBox"></div>
-      <div class="chart-cap" id="monCap"></div>
+    <div class="chart-card" id="dailyCard" data-page-node-id="v7FWLF6vGbfM7D1r8uY8po">
+      <div class="cc-head" data-page-node-id="9qa2GVVCEldCf7btNQ9q55">每日支出<span class="cc-sub" id="dailyCap" data-page-node-id="USJVGtFGe53C3uZDO5hTqp"></span></div>
+      <div id="dailyBox" data-page-node-id="zfRhpBGBCOGo2hIrlSxlzG"></div>
+    </div>
+
+    <div class="chart-card" id="monthlyCard" data-page-node-id="KjDWg2Jq6rfQfMSfsVvCT3">
+      <div class="cc-head" data-page-node-id="ShUnkCnqQ7NZDgIcrADUvd">近 6 个月<span class="cc-sub" data-page-node-id="GUHbTlrLP4WvbDnwGDH32h"><i class="dot e" data-page-node-id="niTPYnt5TRC0HGUg2ZpPHl"></i>支出<i class="dot i" data-page-node-id="jpmG2dFdbKkMewxcHqIvmH"></i>收入</span></div>
+      <div id="monthlyBox" data-page-node-id="xu1hy2hsUDyHsYkg3E5nIy"></div>
+      <div class="chart-cap" id="monCap" data-page-node-id="OpSLkH5ayiUQYhbSrfTvRr"></div>
     </div>
   </div>
 </div>
 
 <!-- 首次配置页 -->
-<div class="wrap setup" id="setup" hidden>
-  <div class="app-logo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5V2z"/><line x1="9.5" y1="7" x2="14.5" y2="7"/><line x1="9.5" y1="11" x2="14.5" y2="11"/></svg>
+<div class="wrap setup" id="setup" hidden data-page-node-id="bgYi4ZQ68DSMNutEnPmXxs">
+  <div class="app-logo" data-page-node-id="ucAH4UqsqrUTreRibY9xnS">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="LKT22STPYWhEwnMntqjU8x"><path d="M6 2h12v20l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5V2z" data-page-node-id="c8gsUDQYRyX5b39Tfbtf7u"/><line x1="9.5" y1="7" x2="14.5" y2="7" data-page-node-id="UKbtWiI8acfz1KYyyb03xK"/><line x1="9.5" y1="11" x2="14.5" y2="11" data-page-node-id="7WqRQecDTpOmohP30gEik4"/></svg>
   </div>
-  <h2 class="setup-title">连接你的账本</h2>
-  <p class="setup-sub">填一次接口信息，之后会自动记住</p>
+  <h2 class="setup-title" data-page-node-id="fsRBcZjlqJn8ucnAo6ENhO">连接你的账本</h2>
+  <p class="setup-sub" data-page-node-id="6bHC04eJ9SdrxAu9IB1mPI">填一次接口信息，之后会自动记住</p>
 
-  <div class="card setup-card">
-    <div class="field">
-      <label for="cfgApi">API 地址</label>
-      <input id="cfgApi" placeholder="https://ledger-api.xxx.workers.dev" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div class="card setup-card" data-page-node-id="CT3XPabAF2nWANxgtqRYsV">
+    <div class="field" data-page-node-id="YKPDIguYX65EPjnGXoYZHV">
+      <label for="cfgApi" data-page-node-id="4Tl8rFmwI9omegwTHJ9cUc">API 地址</label>
+      <input id="cfgApi" placeholder="https://ledger-api.xxx.workers.dev" autocapitalize="off" autocorrect="off" spellcheck="false" data-page-node-id="qLjzVaV77AAIJjHxxXytoC">
     </div>
-    <div class="field">
-      <label for="cfgToken">Token</label>
-      <input id="cfgToken" type="password" placeholder="你的 API Token" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
-      <button class="reveal-btn" id="cfgTokenEye" type="button" aria-label="显示 Token">显示</button>
+    <div class="field" data-page-node-id="8CbmEqx5osCnf5MlSsCBDg">
+      <label for="cfgToken" data-page-node-id="UcfV5pwvVSnfm4obSfTJkk">Token</label>
+      <input id="cfgToken" type="password" placeholder="你的 API Token" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" data-page-node-id="4pTwrGTnX9xWFHcIBvGbIb">
+      <button class="reveal-btn" id="cfgTokenEye" type="button" aria-label="显示 Token" data-page-node-id="D0AO6WrtQ3mkqzXwrmVyWi">显示</button>
+    </div>
+    <div class="field" data-page-node-id="9pb94zZ2tecSaDY0vyhYEM">
+      <label for="cfgBudget" data-page-node-id="QI4Tt3f6cepQo9nsJofDJd">月预算</label>
+      <input id="cfgBudget" type="number" inputmode="decimal" placeholder="选填，如 3000" autocomplete="off" data-page-node-id="7oCzh6FbUbZI4QFFPIuyar">
     </div>
   </div>
 
-  <button class="btn btn-primary" id="cfgSave">保存并加载</button>
-  <button class="text-btn" id="setupBack" hidden>返回账本</button>
-  <p class="msg" id="cfgMsg"></p>
+  <button class="btn btn-primary" id="cfgSave" data-page-node-id="qQNu3FkkC5Er7Rzeo3vhAO">保存并加载</button>
+  <button class="text-btn" id="exportBtn" type="button" hidden data-page-node-id="8d1pXSueEv60sRONKToVWb">导出全部记录（CSV）</button>
+  <button class="text-btn" id="setupBack" hidden data-page-node-id="oPE9srCrAGnf0eN85jIFm2">返回账本</button>
+  <p class="msg" id="cfgMsg" data-page-node-id="iH1DAomIvKwYPQpr0gaWZ3"></p>
 </div>
 
 <!-- 悬浮的记一笔按钮 -->
-<button class="fab" id="fab" hidden>
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+<button class="fab" id="fab" hidden data-page-node-id="hCT4MiG9kOpcsUE0D8WUln">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" data-page-node-id="XhAq12M2mZ9k2cfV4yZj1Q"><path d="M12 5v14" data-page-node-id="TwDLFQvkCpRxfgW9btp9Xs"/><path d="M5 12h14" data-page-node-id="96R5OK06n49kj6aWcR4I9e"/></svg>
   记一笔
 </button>
 
 <!-- 记一笔抽屉 -->
-<div class="mask" id="mask">
-  <div class="sheet" id="addSheet">
-    <div class="grabber"></div>
-    <div class="sheet-head">
-      <button class="sheet-cancel" id="cancel">取消</button>
-      <div class="sheet-title" id="sheetTitle">记一笔</div>
+<div class="mask" id="mask" data-page-node-id="KM92SHvgeYkXXccsFpyEFe">
+  <div class="sheet" id="addSheet" data-page-node-id="pLxcBAVaAuUpgpvuqgS304">
+    <div class="grabber" data-page-node-id="Kabq86afXCfACbSQKC3fc7"></div>
+    <div class="sheet-head" data-page-node-id="0wYGeuDy5jSfR6gIIPPBHL">
+      <button class="sheet-cancel" id="cancel" data-page-node-id="ydLCnkETTWHK3mwvr6Ndxu">取消</button>
+      <div class="sheet-title" id="sheetTitle" data-page-node-id="Uo38gmYsMcP2UpnnBwxFg4">记一笔</div>
     </div>
 
-    <div class="seg" id="typeSeg">
-      <button class="on" data-type="expense" type="button">支出</button>
-      <button data-type="income" type="button">收入</button>
+    <div class="seg" id="typeSeg" data-page-node-id="PHjHtX63XCiNNxQsGDVKEf">
+      <button class="on" data-type="expense" type="button" data-page-node-id="OBkF1FF5xj5PzebRmnrj4d">支出</button>
+      <button data-type="income" type="button" data-page-node-id="f2kB7Rtp5ULAWhqDauRWz1">收入</button>
     </div>
 
-    <div class="amount-box">
-      <span class="cur">¥</span>
-      <input id="fAmount" type="number" inputmode="decimal" placeholder="0.00" autocomplete="off">
+    <div class="amount-box" data-page-node-id="qbbMZ7fzJEFyWpctWKy0Hd">
+      <span class="cur" data-page-node-id="k4K7rpKHBcBf6mmLaDM0iH">¥</span>
+      <input id="fAmount" type="number" inputmode="decimal" placeholder="0.00" autocomplete="off" data-page-node-id="wcKlAxHp8bqFRrWXuiNj3U">
     </div>
 
-    <div class="fields">
-      <div class="field">
-        <label for="fTime">时间</label>
-        <input id="fTime" type="datetime-local">
-        <div class="date-quick">
-          <button type="button" id="qToday">今天</button>
-          <button type="button" id="qYesterday">昨天</button>
+    <div class="fields" data-page-node-id="inLbYQDcPsiONKvdgziCEM">
+      <div class="field" data-page-node-id="Rmm65gjO7yjHDbaXH83mJU">
+        <label for="fTime" data-page-node-id="asD0EQXHJnKCZEoYhXvBTK">时间</label>
+        <input id="fTime" type="datetime-local" data-page-node-id="2SxFd9zdM6HGdJfgj8MTRy">
+        <div class="date-quick" data-page-node-id="VH96CBLEeDjfDv6iyCAiOz">
+          <button type="button" id="qToday" data-page-node-id="Ufpw2HXdo0mZS8sJAMbz85">今天</button>
+          <button type="button" id="qYesterday" data-page-node-id="UOKUl4APKeFCBe4x5K4vUz">昨天</button>
         </div>
       </div>
-      <div class="field">
-        <label for="fNote">备注</label>
-        <input id="fNote" placeholder="选填，如 沙县小吃">
+      <div class="field" data-page-node-id="VFd9X4pF8gwhTYJf738FqY">
+        <label for="fNote" data-page-node-id="H29stkedvkzN76E8xibMIq">备注</label>
+        <input id="fNote" placeholder="选填，如 沙县小吃" data-page-node-id="lbWz4NUrD4bWTRiihfbSWR">
       </div>
     </div>
 
     <!-- 分类：芯片式。常用项点一下选中，冷门项走「自定义」 -->
-    <div class="chip-block" id="catBlock">
-      <div class="chip-head">
-        <span id="catLabel">分类</span>
-        <button class="chip-custom-btn" id="catCustomBtn" type="button">自定义…</button>
+    <div class="chip-block" id="catBlock" data-page-node-id="gXHm4mg4tagPlKpLYa9goe">
+      <div class="chip-head" data-page-node-id="M5cKYKzmWrJP3mD96RPpAQ">
+        <span id="catLabel" data-page-node-id="fxPrzJGAMfUYhm1E6DFQbl">分类</span>
+        <button class="chip-custom-btn" id="catCustomBtn" type="button" data-page-node-id="0gLu6uQ8WyvCE72bg6nT9E">自定义…</button>
       </div>
-      <div class="chips" id="catChips"></div>
-      <div class="chip-custom" id="catCustom" hidden>
-        <input id="catCustomInput" placeholder="输入自定义分类" maxlength="10">
-        <button type="button" id="catCustomOk">确定</button>
+      <div class="chips" id="catChips" data-page-node-id="31XroBFEHAkSM1UrFEUNWj"></div>
+      <div class="chip-custom" id="catCustom" hidden data-page-node-id="L8EWW5PI9vgibqxNCdB98v">
+        <input id="catCustomInput" placeholder="输入自定义分类" maxlength="10" data-page-node-id="B6UoRHGnv1qbn934ZAyens">
+        <button type="button" id="catCustomOk" data-page-node-id="sLmy41FqV21NOm7oYeDqkJ">确定</button>
       </div>
       <!-- 真实值存这里，提交时读它，跟原来的 fCategory 语义一致 -->
-      <input type="hidden" id="fCategory">
+      <input type="hidden" id="fCategory" data-page-node-id="FEZ5XcaqfhQY16kSwdV9jD">
     </div>
 
     <!-- 支付方式：芯片式。收入模式下标题变「到账方式」 -->
-    <div class="chip-block" id="acctBlock">
-      <div class="chip-head">
-        <span id="accountLabel">支付方式</span>
-        <button class="chip-custom-btn" id="acctCustomBtn" type="button">自定义…</button>
+    <div class="chip-block" id="acctBlock" data-page-node-id="sfZB7dF8DssdO8MPD8Fn9H">
+      <div class="chip-head" data-page-node-id="SZIL263EMYYi8egyZZpELO">
+        <span id="accountLabel" data-page-node-id="WEpVjjyBHY2rxk08Y8PYbG">支付方式</span>
+        <button class="chip-custom-btn" id="acctCustomBtn" type="button" data-page-node-id="7wZf83le3LVqqp8ADoCbuC">自定义…</button>
       </div>
-      <div class="chips" id="acctChips"></div>
-      <div class="chip-custom" id="acctCustom" hidden>
-        <input id="acctCustomInput" placeholder="输入自定义方式" maxlength="10">
-        <button type="button" id="acctCustomOk">确定</button>
+      <div class="chips" id="acctChips" data-page-node-id="je7vWjtxTQS4AoXLhsXCpI"></div>
+      <div class="chip-custom" id="acctCustom" hidden data-page-node-id="uj5pNz4ktsBAmMDA7Kgl0W">
+        <input id="acctCustomInput" placeholder="输入自定义方式" maxlength="10" data-page-node-id="qvIv62q6JwB2ka5D7Ozpbh">
+        <button type="button" id="acctCustomOk" data-page-node-id="VmUuP7kE8ybXuyOKN4G9fp">确定</button>
       </div>
-      <input type="hidden" id="fAccount">
+      <input type="hidden" id="fAccount" data-page-node-id="337IcQYKIlcm07qmrJTSgf">
     </div>
 
-    <button class="btn btn-primary" id="save">保存</button>
-    <button class="del-entry" id="delEntry" hidden>删除记录</button>
-    <p class="msg" id="formMsg"></p>
+    <button class="btn btn-primary" id="save" data-page-node-id="P4D9cQDE3xaM2iVCIJ3z0q">保存</button>
+    <button class="del-entry" id="delEntry" hidden data-page-node-id="j8QezrFxwMedLVD9mFenQy">删除记录</button>
+    <p class="msg" id="formMsg" data-page-node-id="dk8rANaSvoWn6p6ODYsKWL"></p>
   </div>
 </div>
 
 <!-- 删除确认（iOS 操作弹层） -->
-<div class="mask" id="delMask">
-  <div class="as-wrap">
-    <div class="as-card">
-      <div class="as-title">这条记录将被删除，且无法恢复</div>
-      <div class="as-detail" id="delDetail"></div>
-      <button class="as-btn danger" id="delConfirm">删除记录</button>
+<div class="mask" id="delMask" data-page-node-id="WG92ZMikFAAJgCAemnkvbC">
+  <div class="as-wrap" data-page-node-id="u551zE7rZnaTGHoDv3ISLM">
+    <div class="as-card" data-page-node-id="IZg69ysIVviXU64YccM6VF">
+      <div class="as-title" data-page-node-id="YpAjNo4UpNU0SIPIHp0Cav">这条记录将被删除，且无法恢复</div>
+      <div class="as-detail" id="delDetail" data-page-node-id="B1SMglDVMUpINMDLZzaQmp"></div>
+      <button class="as-btn danger" id="delConfirm" data-page-node-id="GewRWif294cby8PgWSn5Wv">删除记录</button>
     </div>
-    <div class="as-card">
-      <button class="as-btn" id="delCancel">取消</button>
+    <div class="as-card" data-page-node-id="D26JsXeeWPolT5D23VD0SQ">
+      <button class="as-btn" id="delCancel" data-page-node-id="skBp1OpaPubSJbOQiHznAt">取消</button>
     </div>
   </div>
 </div>
 
 <!-- 轻提示 -->
-<div class="toast" id="toast" role="status"></div>
+<div class="toast" id="toast" role="status" data-page-node-id="P1TFlsFtQVpJDgAb5RNA4S"></div>
 
 <script>
 /* ================= 禁用手势缩放 =================
@@ -959,10 +1073,13 @@ let toastTimer = null;
 let view = 'list';        // 明细 / 统计
 let statYm = null;        // 统计视图正在查看的月份 {y, m}
 let selCat = null;        // 占比图选中的分类
+let selIncCat = null;     // 收入构成图选中的分类
 let selDay = null;        // 每日图选中的日期
 let selMon = null;        // 月度图选中的月份
 let editingId = null;     // 正在编辑的记录 id（null = 新增）
 let dataTruncated = false; // 列表是否被服务端截断（统计可能不完整）
+let filterText = '';       // 明细页搜索关键词
+let filterCat = null;      // 明细页分类筛选（null = 全部）
 
 /* ================= 预设选项 =================
    分类严格对齐后端 AI 的 10 个取值（见 Worker 里的 SYSTEM_PROMPT），
@@ -987,6 +1104,18 @@ const CAT_INCOME = [
   { v: '工资' }, { v: '奖金' }, { v: '红包' }, { v: '理财' }, { v: '报销' }, { v: '退款' }, { v: '其他' },
 ];
 
+/* 收入构成的饼图配色。后端收入侧没有固定 10 类口径，这里给常用的
+   收入类型各配一个色，没认出来的走收入绿。 */
+const INC_COLORS = {
+  '工资': '#34C759',
+  '奖金': '#FF9500',
+  '红包': '#FF3B30',
+  '理财': '#5856D6',
+  '报销': '#007AFF',
+  '退款': '#30B0C7',
+  '其他': '#8E8E93',
+};
+
 /* 支付方式。按使用频率排序，前几个一眼就能点中 */
 const ACCOUNTS_EXPENSE = [
   { v: '微信' }, { v: '支付宝' }, { v: '银行卡' }, { v: '现金' }, { v: '信用卡' }, { v: '云闪付' },
@@ -997,18 +1126,24 @@ const ACCOUNTS_INCOME = [
 
 const $ = (id) => document.getElementById(id);
 
+/* 预算只认「大于 0 的有限数字」，其余一律当没设 */
+function sanitizeBudget(v) {
+  const n = Number(v);
+  return (Number.isFinite(n) && n > 0) ? n : null;
+}
 function loadCfg() {
   try {
     const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
     if (!raw || typeof raw !== 'object') return null;
     if (typeof raw.api !== 'string' || typeof raw.token !== 'string') return null;
-    return { api: raw.api.trim(), token: raw.token.trim() };
+    return { api: raw.api.trim(), token: raw.token.trim(), budget: sanitizeBudget(raw.budget) };
   } catch { return null; }
 }
 function saveCfg(c) {
   localStorage.setItem(LS_KEY, JSON.stringify({
     api: String((c && c.api) || '').trim(),
     token: String((c && c.token) || '').trim(),
+    budget: sanitizeBudget(c && c.budget) || '',
   }));
 }
 
@@ -1266,7 +1401,10 @@ function showSetup(msg, isErr) {
   if (cfg) {
     $('cfgApi').value = cfg.api || '';
     $('cfgToken').value = cfg.token || '';
+    $('cfgBudget').value = cfg.budget ? cfg.budget : '';
   }
+  /* 没连接过账本时导出没有意义（内存里没数据），藏起来 */
+  $('exportBtn').hidden = !cfg;
   /* 每次进配置页都把 Token 打回码，省得上次点过「显示」就一直明文挂着 */
   const tok = $('cfgToken');
   if (tok) {
@@ -1358,9 +1496,57 @@ function render() {
   $('total').textContent = money(fromCents(expenseC));
   $('statIncome').textContent = money(fromCents(incomeC));
   $('statCount').textContent = monthCount + ' 笔';
-  /* 「共 N 条」是全部记录数，不是本月的 —— 和上面那个「N 笔」不是一回事，
-     所以文案要带「共」字区分开，别让人以为两个数该相等 */
-  $('recordCount').textContent = '共 ' + live.length + ' 条';
+
+  /* ---------- 环比提示：本月支出 vs 上月 ----------
+     数据现成（liveRecords 全量在内存），一次遍历的事。
+     只在「上个月有支出」时才说话 —— 没有基数就谈不上多和少。 */
+  const pmY = curM === 0 ? curY - 1 : curY;
+  const pmM = curM === 0 ? 11 : curM - 1;
+  let prevExpC = 0;
+  live.forEach(r => {
+    if (r.type === 'income') return;
+    if (!inMonth(recDate(r), pmY, pmM)) return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    prevExpC += c;
+  });
+  const trendEl = $('statTrend');
+  if (prevExpC > 0 && expenseC > 0) {
+    const pct = (expenseC - prevExpC) / prevExpC * 100;
+    const up = pct >= 0;
+    trendEl.innerHTML = '比上月' + (up ? '多花 <b class="up">' : '少花 <b class="down">') + fmtPct(Math.abs(pct)) + '</b><span class="trend-sub">（上月 ' + money(fromCents(prevExpC)) + '）</span>';
+    trendEl.hidden = false;
+  } else if (prevExpC > 0 && expenseC === 0 && monthCount > 0) {
+    trendEl.textContent = '本月还没有支出 · 上月花了 ' + money(fromCents(prevExpC));
+    trendEl.hidden = false;
+  } else {
+    trendEl.hidden = true;
+  }
+
+  /* ---------- 预算进度条 ----------
+     预算是本地偏好（存 localStorage），不是数据，所以不进后端。
+     没设预算就整块隐藏，不给一个空壳子占地方。 */
+  const budgetBox = $('budgetBox');
+  const budget = cfg && cfg.budget;
+  if (budget > 0) {
+    const used = fromCents(expenseC);
+    const pct = used / budget * 100;
+    const fill = $('budgetFill');
+    fill.style.width = Math.min(100, pct) + '%';
+    fill.className = 'budget-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
+    $('budgetText').innerHTML =
+      '已用 <b>' + (pct >= 100 ? Math.round(pct) : fmtPct(pct)) + '</b> · 还能花 <b>' + money(Math.max(0, budget - used)) + '</b>';
+    budgetBox.hidden = false;
+  } else {
+    budgetBox.hidden = true;
+  }
+
+  /* ---------- 记录条数：有筛选时显示「匹配 N / 共 M 条」 ---------- */
+  const filtering = filterText.trim() !== '' || filterCat !== null;
+  const shownAll = filtering ? applyFilter(live) : live;
+  $('recordCount').textContent = filtering
+    ? '匹配 ' + shownAll.length + ' / 共 ' + live.length + ' 条'
+    : '共 ' + live.length + ' 条';
 
   if (!live.length) {
     $('list').innerHTML =
@@ -1372,12 +1558,24 @@ function render() {
     return;
   }
 
+  /* 搜索/筛选一个都没命中：给个明确的空态，别让人以为页面坏了 */
+  if (filtering && !shownAll.length) {
+    $('list').innerHTML =
+      '<div class="state">' +
+        '<div class="bubble-big">' + ICONS.empty.s + '</div>' +
+        '<div>没有匹配的记录</div>' +
+        '<div class="state-sub">换个关键词，或点搜索框右侧「清除」</div>' +
+      '</div>';
+    return;
+  }
+
   /* 按天分组（列表只展示最近 60 条，更早的看统计）。
+     搜索/筛选时放宽到 200 条 —— 找东西的时候少翻一次页。
      用 Map 归组，而不是「看跟前一条是不是同一天」——
      后者只在数据严格按天排序时才成立，一旦顺序有变
      （服务端改了排序、或者中间插了一条），同一天会被拆成好几段。 */
-  const MAX_LIST = 60;
-  const shown = live.slice(0, MAX_LIST);
+  const MAX_LIST = filtering ? 200 : 60;
+  const shown = shownAll.slice(0, MAX_LIST);
   const groupMap = new Map();
   shown.forEach(r => {
     const d = recDate(r);
@@ -1400,11 +1598,12 @@ function render() {
     return '<div class="group-head"><span>' + (g.valid ? dayLabel(g.d) : '记录') + '</span>' +
       (sum ? '<span class="sum">' + sum + '</span>' : '') + '</div>' +
       '<div class="card">' + g.items.map(itemHtml).join('') + '</div>';
-  }).join('') + (live.length > MAX_LIST
-    /* 判据必须用 live.length 而不是 records.length：被 droppedIds 隐藏掉的
-       记录不该算进「够不够 60 条」，否则明明只显示了 59 条
-       却还提示「仅显示最近 60 条」 */
-    ? '<div class="more-note">仅显示最近 ' + MAX_LIST + ' 条，更早记录见「统计」</div>'
+  }).join('') + (shownAll.length > MAX_LIST
+    /* 判据跟着筛选结果走：没筛选时 = 原来的 live.length（仍要排除 droppedIds）；
+       筛选时 = 匹配数超出展示上限才提示 */
+    ? '<div class="more-note">' + (filtering
+        ? '匹配结果太多，仅显示前 ' + MAX_LIST + ' 条'
+        : '仅显示最近 ' + MAX_LIST + ' 条，更早记录见「统计」') + '</div>'
     : '');
 
   if (statYm) renderStats();
@@ -1562,7 +1761,7 @@ function shiftMonth(delta) {
   if (m < 0) { m = 11; y--; }
   if (m > 11) { m = 0; y++; }
   statYm = { y: y, m: m };
-  selCat = null; selDay = null; selMon = null;
+  selCat = null; selIncCat = null; selDay = null; selMon = null;
   renderStats();
 }
 
@@ -1617,7 +1816,7 @@ function renderStats() {
   }
 
   /* 图表区随月份有无数据一起显隐 */
-  ['donutCard', 'dailyCard', 'monthlyCard'].forEach(function (id) {
+  ['donutCard', 'incCard', 'insightCard', 'dailyCard', 'monthlyCard'].forEach(function (id) {
     const el = $(id);
     if (el) el.hidden = !mr.length;
   });
@@ -1660,55 +1859,186 @@ function renderStats() {
     cats = cats.slice(0, 7).concat([{ name: '其他', amount: rest, merged: true }]);
   }
   renderDonut(cats, exp);
+  renderInsights(mr, y, m);
+
+  /* ---------- 收入构成：口径同支出饼图（Top7 + 其他合并） ---------- */
+  const incMap = new Map();
+  mr.forEach(r => {
+    if (r.type !== 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    const k = r.category || '未分类';
+    incMap.set(k, (incMap.get(k) || 0) + c);
+  });
+  let incCats = [...incMap.entries()]
+    .map(x => ({ name: x[0], amount: fromCents(x[1]) }))
+    .sort((a, b) => b.amount - a.amount);
+  if (incCats.length > 8) {
+    const rest = incCats.slice(7).reduce((s, c) => s + c.amount, 0);
+    incCats = incCats.slice(0, 7).concat([{ name: '其他', amount: rest, merged: true }]);
+  }
+  const incCard = $('incCard');
+  if (inc > 0) {
+    incCard.hidden = false;
+    renderIncomeDonut(incCats, inc);
+  } else {
+    /* 这个月没收入就不摆一张空饼图 —— 占位话术支出侧已经有了 */
+    incCard.hidden = true;
+  }
+
   renderDaily(mr, y, m);
   renderMonthly();
   updateMonthNav();
 }
 
-function renderDonut(cats, exp) {
-  const box = $('donutBox');
+/* 通用环形图绘制。支出占比和收入构成共用一套弧线/图例/选中逻辑，
+   两处各包一层只差配色和中心文案 —— 改样式只改这里，两边同时生效。 */
+function renderDonutGeneric(o) {
+  const box = o.box;
   const svgEl = box.querySelector('svg');
-  const center = $('donutCenter');
+  const center = o.center;
   const emptyEl = box.querySelector('.chart-empty');
 
-  if (!cats.length) {
+  if (!o.cats.length) {
     svgEl.style.display = 'none';
     center.style.display = 'none';
-    if (!emptyEl) box.insertAdjacentHTML('beforeend', '<div class="chart-empty">本月还没有支出记录</div>');
-    $('donutLegend').innerHTML = '';
+    if (!emptyEl) box.insertAdjacentHTML('beforeend', '<div class="chart-empty">' + o.emptyText + '</div>');
+    o.legend.innerHTML = '';
     return;
   }
   svgEl.style.display = '';
   center.style.display = '';
   if (emptyEl) emptyEl.remove();
 
-  const total = cats.reduce((s, c) => s + c.amount, 0) || 1;
-  cats.forEach(c => {
-    c.color = c.merged ? '#8E8E93' : iconFor({ type: 'expense', category: c.name }).c;
-    c.pct = c.amount / total * 100;
-  });
-  if (selCat && !cats.some(c => c.name === selCat)) selCat = null;
-  const sel = cats.find(c => c.name === selCat);
+  const total = o.cats.reduce((s, c) => s + c.amount, 0) || 1;
+  o.cats.forEach(c => { c.pct = c.amount / total * 100; });
 
   let cum = 0, arcs = '';
-  cats.forEach(c => {
-    arcs += '<circle cx="100" cy="100" r="78" fill="none" stroke="' + c.color + '" stroke-width="24" pathLength="100" stroke-dasharray="' + c.pct + ' ' + Math.max(0, 100 - c.pct) + '" stroke-dashoffset="' + (-cum) + '" data-cat="' + esc(c.name) + '"' + (selCat === c.name ? ' class="sel"' : '') + '/>';
+  o.cats.forEach(c => {
+    arcs += '<circle cx="100" cy="100" r="78" fill="none" stroke="' + c.color + '" stroke-width="24" pathLength="100" stroke-dasharray="' + c.pct + ' ' + Math.max(0, 100 - c.pct) + '" stroke-dashoffset="' + (-cum) + '" data-cat="' + esc(c.name) + '"' + (o.sel === c.name ? ' class="sel"' : '') + '/>';
     cum += c.pct;
   });
   svgEl.innerHTML = '<g transform="rotate(-90 100 100)">' + arcs + '</g>';
-  box.classList.toggle('dim', !!sel);
-  center.innerHTML = sel
-    ? '<div class="dc-val">' + money(sel.amount) + '</div><div class="dc-lab">' + esc(sel.name) + ' · ' + fmtPct(sel.pct) + '</div>'
-    : '<div class="dc-val">' + money(exp) + '</div><div class="dc-lab">本月支出</div>';
+  box.classList.toggle('dim', !!o.sel);
+  const selObj = o.cats.find(c => c.name === o.sel) || null;
+  center.innerHTML = selObj
+    ? '<div class="dc-val">' + money(selObj.amount) + '</div><div class="dc-lab">' + esc(selObj.name) + ' · ' + fmtPct(selObj.pct) + '</div>'
+    : o.centerAll;
 
-  $('donutLegend').innerHTML = cats.map(c => {
-    const ic = c.merged ? { c: c.color, s: ICONS.other.s } : iconFor({ type: 'expense', category: c.name });
-    return '<div class="dl-row' + (selCat === c.name ? ' sel' : '') + '" data-cat="' + esc(c.name) + '">' +
+  o.legend.innerHTML = o.cats.map(c => {
+    const ic = o.legendIcon(c);
+    return '<div class="dl-row' + (o.sel === c.name ? ' sel' : '') + '" data-cat="' + esc(c.name) + '">' +
       '<div class="dl-ic" style="color:' + ic.c + ';background:' + ic.c + '1E">' + ic.s + '</div>' +
       '<div class="dl-name">' + esc(c.name) + '</div>' +
       '<div class="dl-amt"><div class="a">' + money(c.amount) + '</div><div class="p">' + fmtPct(c.pct) + '</div></div>' +
     '</div>';
   }).join('');
+}
+
+function renderDonut(cats, exp) {
+  cats.forEach(c => {
+    c.color = c.merged ? '#8E8E93' : iconFor({ type: 'expense', category: c.name }).c;
+  });
+  if (selCat && !cats.some(c => c.name === selCat)) selCat = null;
+  renderDonutGeneric({
+    box: $('donutBox'), legend: $('donutLegend'), center: $('donutCenter'),
+    cats: cats, sel: selCat, emptyText: '本月还没有支出记录',
+    centerAll: '<div class="dc-val">' + money(exp) + '</div><div class="dc-lab">本月支出</div>',
+    legendIcon: (c) => c.merged ? { c: c.color, s: ICONS.other.s } : iconFor({ type: 'expense', category: c.name }),
+  });
+}
+
+function renderIncomeDonut(cats, inc) {
+  cats.forEach(c => {
+    c.color = c.merged ? '#8E8E93' : (INC_COLORS[c.name] || '#34C759');
+  });
+  if (selIncCat && !cats.some(c => c.name === selIncCat)) selIncCat = null;
+  renderDonutGeneric({
+    box: $('incBox'), legend: $('incLegend'), center: $('incCenter'),
+    cats: cats, sel: selIncCat, emptyText: '本月没有收入记录',
+    centerAll: '<div class="dc-val">' + money(inc) + '</div><div class="dc-lab">本月收入</div>',
+    legendIcon: (c) => ({ c: c.merged ? '#8E8E93' : '#34C759', s: ICONS.income.s }),
+  });
+}
+
+/* ================= 本月看点 =================
+   把「这月花得怎么样」浓缩成最多两句话：
+   1. 最大单笔支出 —— 一个月里最值得回头看的一笔；
+   2. 分类环比异常 —— 和前三个月同类平均比，偏差 ≥40% 且金额够分量才说话。
+   没有可说的就整卡隐藏，绝不硬凑。 */
+function renderInsights(mr, y, m) {
+  const card = $('insightCard'), list = $('insightList');
+  const rows = [];
+
+  /* 1. 最大单笔支出 */
+  let maxR = null, maxC = 0;
+  mr.forEach(r => {
+    if (r.type === 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    if (c > maxC) { maxC = c; maxR = r; }
+  });
+  if (maxR) {
+    const p = bjParts(maxR.occurred_at);
+    const bits = [maxR.category || '未分类'];
+    if (maxR.note) bits.push(maxR.note);
+    rows.push(
+      '最大单笔支出 <span class="hl">' + money(fromCents(maxC)) + '</span>' +
+      '（' + esc(bits.join(' · ')) + (p ? '，' + (p.m + 1) + '月' + p.d + '日' : '') + '）'
+    );
+  }
+
+  /* 2. 分类环比异常。前三个月的记录只取一次，别每个分类都全表扫一遍 */
+  const curMap = new Map();
+  mr.forEach(r => {
+    if (r.type === 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    const k = r.category || '未分类';
+    curMap.set(k, (curMap.get(k) || 0) + c);
+  });
+  const prior = [];
+  for (let i = 1; i <= 3; i++) {
+    let yy = y, mm = m - i;
+    if (mm < 0) { mm += 12; yy--; }
+    prior.push(...monthRecords(yy, mm));
+  }
+  let best = null;
+  [...curMap.entries()].forEach(([name, curC]) => {
+    const cur = fromCents(curC);
+    if (cur < 20) return;                 // 太小的类不值得占用一行
+    let sumC = 0;
+    prior.forEach(r => {
+      if (r.type === 'income') return;
+      if ((r.category || '未分类') !== name) return;
+      const c = toCents(r.amount);
+      if (c === null) return;
+      sumC += c;
+    });
+    const avg = fromCents(sumC) / 3;
+    if (avg <= 0) return;                 // 前三个月没花过的类，缺基数不硬算
+    const dev = (cur - avg) / avg * 100;
+    if (Math.abs(dev) < 40) return;
+    if (!best || Math.abs(dev) > Math.abs(best.dev)) best = { name: name, dev: dev, cur: cur, avg: avg };
+  });
+  if (best) {
+    const up = best.dev >= 0;
+    rows.push(
+      '「' + esc(best.name) + '」比前三个月平均' +
+      (up ? '多花 <span class="hl bad">' : '少花 <span class="hl ok">') + fmtPct(Math.abs(best.dev)) + '</span>' +
+      '（本月 ' + money(best.cur) + '，月均 ' + money(best.avg) + '）'
+    );
+  }
+
+  if (rows.length && mr.length) {
+    card.hidden = false;
+    $('insightTitle').textContent = (m + 1) + '月看点';
+    list.innerHTML = rows.map(t =>
+      '<div class="insight-row"><span class="insight-dot"></span><div>' + t + '</div></div>'
+    ).join('');
+  } else {
+    card.hidden = true;
+  }
 }
 
 function renderDaily(mr, y, m) {
@@ -1862,7 +2192,7 @@ $('mNext').onclick = () => shiftMonth(1);
 $('mBack').onclick = () => {
   const p = bjParts(Date.now());
   statYm = { y: p.y, m: p.m };
-  selCat = null; selDay = null; selMon = null;
+  selCat = null; selIncCat = null; selDay = null; selMon = null;
   renderStats();
 };
 
@@ -1874,6 +2204,17 @@ $('donutBox').onclick = (e) => {
 $('donutLegend').onclick = (e) => {
   const r = e.target.closest('.dl-row');
   if (r) toggleCat(r.dataset.cat);
+};
+
+/* 收入构成图的选中 —— 和支出饼图各选各的，互不干扰 */
+function toggleIncCat(name) { selIncCat = selIncCat === name ? null : name; renderStats(); }
+$('incBox').onclick = (e) => {
+  const c = e.target.closest('circle[data-cat]');
+  if (c) toggleIncCat(c.dataset.cat);
+};
+$('incLegend').onclick = (e) => {
+  const r = e.target.closest('.dl-row');
+  if (r) toggleIncCat(r.dataset.cat);
 };
 $('dailyBox').onclick = (e) => {
   const h = e.target.closest('.hit');
@@ -1889,6 +2230,122 @@ $('monthlyBox').onclick = (e) => {
   selMon = selMon === k ? null : k;
   renderStats();
 };
+
+/* ================= 明细页搜索 / 筛选 =================
+   数据本来就全量在内存里（liveRecords），过滤纯前端完成，不碰后端。
+   首页汇总（本月支出等）永远算全量 —— 筛选只决定「列表里显示什么」，
+   两边口径分开，才不会出现「筛完数字也变了」的困惑。 */
+function applyFilter(list) {
+  let out = list;
+  const q = filterText.trim().toLowerCase();
+  if (q) {
+    out = out.filter(r => {
+      const hay = [
+        r.note, r.category, r.account,
+        r.type === 'income' ? '收入' : '支出',
+        (r.amount === null || r.amount === undefined) ? '' : String(r.amount),
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  if (filterCat) {
+    if (filterCat === '收入') out = out.filter(r => r.type === 'income');
+    else if (filterCat === '未分类') out = out.filter(r => r.type !== 'income' && !r.category);
+    else out = out.filter(r => r.type !== 'income' && r.category === filterCat);
+  }
+  return out;
+}
+
+/* 筛选芯片：预设分类 + 收入 + 未分类。和统计页同一个 10 类口径 */
+const FILTER_CATS = CAT_EXPENSE.map(c => c.v).concat(['收入', '未分类']);
+
+function buildFilterChips() {
+  $('filterChips').innerHTML = ['全部'].concat(FILTER_CATS).map(v =>
+    '<button type="button" class="f-chip" data-val="' + esc(v) + '">' + esc(v) + '</button>'
+  ).join('');
+  syncFilterChips();
+}
+function syncFilterChips() {
+  [...$('filterChips').children].forEach(b => {
+    const on = b.dataset.val === '全部' ? !filterCat : b.dataset.val === filterCat;
+    b.classList.toggle('on', on);
+  });
+}
+
+$('searchInput').addEventListener('input', (e) => {
+  filterText = e.target.value;
+  $('searchClear').hidden = !filterText.trim();
+  render();
+});
+$('searchClear').onclick = () => {
+  filterText = '';
+  $('searchInput').value = '';
+  $('searchClear').hidden = true;
+  render();
+  $('searchInput').focus();
+};
+$('filterChips').onclick = (e) => {
+  const b = e.target.closest('.f-chip');
+  if (!b) return;
+  filterCat = (b.dataset.val === '全部') ? null : b.dataset.val;
+  syncFilterChips();
+  render();
+};
+
+/* ---------- 首页大数字下钻 ----------
+   点 hero 区任意位置切到统计页。统计页里饼图、日柱、月柱都是现成的，
+   这一步只是把「从首页到构成分析」的路径从两次点击缩成一次。 */
+$('heroCard').addEventListener('click', () => setView('stats'));
+
+/* ---------- 键盘快捷键（桌面端） ----------
+   只在没聚焦输入框、没开弹层时生效，避免干扰正常输入。
+   N = 记一笔，/ = 聚焦搜索。 */
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if ($('mask').classList.contains('on') || $('delMask').classList.contains('on')) return;
+  if (e.key === '/') {
+    e.preventDefault();
+    setView('list');
+    $('searchInput').focus();
+  } else if (e.key === 'n' || e.key === 'N') {
+    e.preventDefault();
+    openSheet();
+  }
+});
+
+/* ================= 导出 CSV =================
+   数据所有权：账是自己的，得能整包带走。纯前端生成，不依赖后端。
+   带 BOM 头，Excel 直接双击打开不乱码；字段全用双引号包裹防逗号注入。 */
+function exportCsv() {
+  const rows = liveRecords();
+  if (!rows.length) { toast('还没有记录可导出', true); return; }
+  const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const head = ['id', '类型', '金额', '分类', '时间', '备注', '支付方式'];
+  const lines = [head.join(',')].concat(rows.map(r => [
+    r.id,
+    r.type === 'income' ? '收入' : '支出',
+    (r.amount === null || r.amount === undefined) ? '' : r.amount,
+    r.category || '',
+    r.occurred_at || '',
+    r.note || '',
+    r.account || '',
+  ].map(cell).join(',')));
+  const p = bjParts(Date.now());
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '账本_' + p.y + pad(p.m + 1) + pad(p.d) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(dataTruncated
+    ? '已导出 ' + rows.length + ' 条（本次加载被截断，可能不是全部）'
+    : '已导出 ' + rows.length + ' 条记录');
+}
+$('exportBtn').onclick = exportCsv;
 
 /* ================= 轻提示 ================= */
 function toast(msg, isError) {
@@ -1910,10 +2367,21 @@ $('cfgSave').onclick = async () => {
     showSetup('API 地址要以 http:// 或 https:// 开头', true);
     return;
   }
+  /* 预算：填了就必须是大于 0 的数字；想清掉预算就留空 */
+  const bRaw = $('cfgBudget').value.trim();
+  let budget = null;
+  if (bRaw) {
+    const n = Number(bRaw);
+    if (!Number.isFinite(n) || n <= 0) {
+      showSetup('预算要是大于 0 的数字，不想要了就留空', true);
+      return;
+    }
+    budget = n;
+  }
   const btn = $('cfgSave');
   btn.disabled = true;
   btn.textContent = '连接中…';
-  cfg = { api: apiUrl, token: token };
+  cfg = { api: apiUrl, token: token, budget: budget };
   saveCfg(cfg);
   try {
     await load();
@@ -2140,6 +2608,8 @@ bindChips('acct');
    万一 init 提前 return，抽屉里也不会是一片空白 */
 buildChips('cat', CAT_EXPENSE);
 buildChips('acct', ACCOUNTS_EXPENSE);
+/* 筛选芯片跟数据无关（固定口径），脚本加载时铺一次就够 */
+buildFilterChips();
 
 /* 任一弹层打开时锁定页面滚动 */
 function syncScrollLock() {
