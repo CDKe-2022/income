@@ -1,0 +1,2475 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="mye8eJSQY4V8ln9JDIwqpq">
+<head data-page-node-id="zS3jAlraPCuxaTfJ54OVuY">
+<meta charset="UTF-8" data-page-node-id="k2JYUajEaTzCfdPoAQQTqD">
+<!-- user-scalable=no + maximum-scale=1 挡住双指缩放；iOS Safari 从 10 版起
+     会忽略这两个值，所以还要靠 JS 拦 gesturestart，以及下面的 touch-action -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" data-page-node-id="KZDWvkzP3A8S0Mfi6G2vXg">
+<meta name="color-scheme" content="light dark" data-page-node-id="3H5A4HhfVDuF6D2GsWbSDM">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7" data-page-node-id="mJVMq59g8L6GE1kL31RqYI">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" data-page-node-id="8mdnpHtVfx5DilnPsaWE9g">
+<meta name="apple-mobile-web-app-capable" content="yes" data-page-node-id="H7syOu4kMZb733j1AxgLgH">
+<meta name="apple-mobile-web-app-status-bar-style" content="default" data-page-node-id="h9PwHTIhiDPS49i4Av1mSZ">
+<meta name="apple-mobile-web-app-title" content="账本" data-page-node-id="5jx0JuFymGFhgZtGjItoDA">
+<title>账本</title>
+<link rel="manifest" href="manifest.webmanifest">
+<!-- iOS 加到主屏幕用的图标（Safari 不认 manifest 的 icons） -->
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
+<style>
+/* ============ 基础 ============ */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+:root { color-scheme: light dark; --bg: #F2F2F7; --card: #FFFFFF; --label: #1C1C1E; --label-2: rgba(60, 60, 67, .60); --label-3: rgba(60, 60, 67, .30); --sep: rgba(60, 60, 67, .12); --fill: rgba(120, 120, 128, .10); --press: rgba(120, 120, 128, .14); --nav-bg: rgba(242, 242, 247, .82); --blue: #007AFF; --green: #34C759; --red: #FF3B30; --card-edge: 0 .5px 0 rgba(0, 0, 0, .02), 0 1px 2px rgba(0, 0, 0, .03); }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #000000; --card: #1C1C1E; --label: #FFFFFF; --label-2: rgba(235, 235, 245, .60); --label-3: rgba(235, 235, 245, .30); --sep: rgba(84, 84, 88, .60); --fill: rgba(120, 120, 128, .22); --press: rgba(120, 120, 128, .28); --nav-bg: rgba(22, 22, 24, .82); --blue: #0A84FF; --green: #30D158; --red: #FF453A; --card-edge: 0 0 0 .5px rgba(255, 255, 255, .08); }
+}
+html, body { margin: 0; padding: 0; }
+/* 双指缩放与双击缩放都挡掉，让它更接近原生 App。
+     pan-x pan-y 保留单指滚动，pinch-zoom 不给 —— 这是禁双指缩放的
+     标准做法，配合上面的 viewport 一起生效。 */
+html { touch-action: pan-x pan-y; }
+body { background: var(--bg); color: var(--label); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; font-size: 15px; line-height: 1.45; padding-bottom: calc(110px + env(safe-area-inset-bottom)); -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; }
+/* 图表、芯片这类不该被手势干扰的区域，单独锁死 touch-action */
+.chart-svg, .donut-box, .chips, .seg, .type-seg { touch-action: pan-x pan-y; }
+[hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; }
+input { font: inherit; color: var(--label); background: transparent; border: none; outline: none; padding: 0; }
+input::placeholder { color: var(--label-3); }
+.wrap { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+/* ============ 顶部导航 ============ */
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 10; height: calc(44px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); display: flex; align-items: center; justify-content: center; background: transparent; transition: background .2s; /* 透明状态下整条都是「看不见的玻璃」，不放开 pointer-events 会把滚到它底下的按钮（比如统计页的翻月箭头）全部吞掉 —— 表现就是「按钮看得见但按不了」。真正要点的只有右侧两个图标， 所以整条禁用、图标单独放开。 */ pointer-events: none; }
+.nav-actions { pointer-events: auto; }
+.nav.scrolled { background: var(--nav-bg); box-shadow: 0 .5px 0 var(--sep); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px); }
+.nav-title { font-size: 17px; font-weight: 600; opacity: 0; transform: translateY(5px); transition: opacity .2s, transform .2s; }
+.nav.scrolled .nav-title { opacity: 1; transform: none; }
+.nav-actions { position: absolute; right: max(8px, calc(50% - 268px)); top: env(safe-area-inset-top); height: 44px; display: flex; align-items: center; }
+.icon-btn { width: 40px; height: 40px; border: none; border-radius: 50%; background: transparent; color: var(--blue); display: flex; align-items: center; justify-content: center; }
+.icon-btn:active { background: var(--press); }
+.icon-btn svg { width: 21px; height: 21px; }
+.icon-btn.spin svg { animation: spin .7s linear infinite; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+/* ============ 主页 ============ */
+.page { padding-top: calc(env(safe-area-inset-top) + 8px); }
+.large-title { font-size: 32px; font-weight: 700; letter-spacing: -.5px; margin: 0; padding: 8px 4px 0; }
+.hero { padding: 20px 4px 4px; cursor: pointer; }
+.hero-label { font-size: 15px; color: var(--label-2); }
+.hero-link { color: var(--blue); font-size: 12.5px; margin-left: 8px; }
+.hero-amount { font-size: clamp(38px, 11vw, 46px); font-weight: 700; letter-spacing: -1px; line-height: 1.15; margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+.hero-sub { font-size: 14px; color: var(--label-2); }
+.hero-sub b { font-weight: 600; color: var(--label); font-variant-numeric: tabular-nums; }
+#statIncome { color: var(--green); }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; padding: 24px 4px 9px; font-size: 13px; color: var(--label-2); }
+.group-head { display: flex; align-items: baseline; justify-content: space-between; padding: 16px 4px 7px; font-size: 13px; color: var(--label-2); }
+.group-head .sum { font-variant-numeric: tabular-nums; }
+.group-head .d { color: var(--label); font-weight: 600; }
+/* ============ 记录列表 ============ */
+.card { background: var(--card); border-radius: 24px; box-shadow: var(--card-edge); overflow: hidden; }
+.item { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 14px; min-height: 58px; cursor: pointer; }
+.item + .item::before { content: ''; position: absolute; left: 64px; right: 0; top: 0; height: .5px; background: var(--sep); }
+.item:active { background: var(--fill); }
+.bubble { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.bubble svg { width: 19px; height: 19px; }
+.item .body { flex: 1; min-width: 0; }
+.item .t { font-size: 15.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .n { font-size: 13px; color: var(--label-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .right { text-align: right; flex-shrink: 0; }
+.item .amt { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.item .amt.in { color: var(--green); }
+.item .time { font-size: 12px; color: var(--label-3); margin-top: 2px; }
+/* ============ 页面分段（明细 / 统计） ============ */
+.page-seg { display: flex; background: var(--fill); border-radius: 999px; padding: 3px; margin: 12px 0 8px; }
+.page-seg button { flex: 1; height: 32px; border: none; background: transparent; border-radius: 999px; font-size: 14px; color: var(--label-2); }
+.page-seg button.on { background: var(--card); color: var(--label); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, .12), 0 0 0 .5px rgba(0, 0, 0, .04); }
+/* ============ 统计视图 ============ */
+.month-nav { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 6px; }
+.m-btn { width: 38px; height: 38px; border: none; border-radius: 50%; background: transparent; color: var(--blue); display: flex; align-items: center; justify-content: center; }
+.m-btn:active:not(:disabled) { background: var(--press); }
+.m-btn:disabled { color: var(--label-3); }
+.m-btn svg { width: 20px; height: 20px; }
+.m-label { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* 翻离本月后出现的小胶囊，点了回本月 */
+.m-back { display: block; margin: 0 auto 12px; height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: var(--fill); color: var(--blue); font-size: 13px; font-weight: 500; }
+.m-back:active { opacity: .6; }
+/* 某月没有任何记录时，图表区统一用它占位 */
+.month-empty { background: var(--card); border-radius: 18px; padding: 28px 16px; text-align: center; color: var(--label-2); font-size: 14px; box-shadow: var(--card-edge); margin-bottom: 12px; }
+.month-empty svg { width: 34px; height: 34px; color: var(--label-3); display: block; margin: 0 auto 10px; }
+.stat-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.stat-chip { background: var(--card); border-radius: 20px; box-shadow: var(--card-edge); padding: 12px 6px 10px; text-align: center; min-width: 0; }
+.sc-label { font-size: 12px; color: var(--label-2); }
+.sc-val { font-size: 15px; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sc-val.pos { color: var(--green); }
+.sc-val.neg { color: var(--red); }
+.chart-card { background: var(--card); border-radius: 24px; box-shadow: var(--card-edge); padding: 16px 16px 14px; margin-bottom: 14px; overflow: hidden; }
+.cc-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.cc-sub { font-size: 12px; font-weight: 400; color: var(--label-2); }
+.cc-sub .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 4px 0 10px; vertical-align: 1px; }
+.cc-sub .dot.e { background: var(--blue); margin-left: 0; }
+.cc-sub .dot.i { background: var(--green); }
+.donut-box { position: relative; width: 208px; margin: 2px auto 12px; }
+.donut-box svg { display: block; width: 100%; height: auto; }
+.donut-box g { cursor: pointer; }
+.donut-box circle { transition: opacity .15s, stroke-width .15s; }
+.donut-box.dim circle:not(.sel) { opacity: .28; }
+.donut-box circle.sel { stroke-width: 29; }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; padding: 0 44px; }
+.dc-val { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+.dc-lab { font-size: 11.5px; color: var(--label-2); margin-top: 2px; line-height: 1.35; }
+.dl-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin: 0 -10px; border-radius: 14px; cursor: pointer; -webkit-user-select: none; user-select: none; }
+.dl-row:active, .dl-row.sel { background: var(--fill); }
+.dl-ic { width: 26px; height: 26px; border-radius: 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.dl-ic svg { width: 14px; height: 14px; }
+.dl-name { flex: 1; min-width: 0; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-amt { text-align: right; flex-shrink: 0; }
+.dl-amt .a { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dl-amt .p { font-size: 11.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.chart-svg { display: block; width: 100%; height: auto; }
+.chart-svg .ax { fill: var(--label-3); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.chart-svg .gl { stroke: var(--sep); stroke-width: 1; }
+.chart-svg .hit { cursor: pointer; }
+.chart-svg .bar { fill: var(--blue); opacity: .3; transition: opacity .15s; }
+.chart-svg .bar.today { opacity: .55; }
+.chart-svg .bar.on { opacity: 1; }
+.chart-svg .bar.in { fill: var(--green); }
+.chart-svg .avg { stroke: var(--blue); opacity: .5; stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-cap { text-align: center; font-size: 12.5px; color: var(--label-2); padding-top: 10px; font-variant-numeric: tabular-nums; }
+.chart-empty { padding: 34px 12px; text-align: center; color: var(--label-3); font-size: 13px; }
+.more-note { text-align: center; color: var(--label-3); font-size: 12.5px; padding: 14px 0 4px; }
+/* ============ 状态（加载 / 空 / 错误） ============ */
+.state { padding: 52px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--label-2); font-size: 14px; text-align: center; }
+.state-sub { font-size: 13px; color: var(--label-3); }
+.spinner { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--sep); border-top-color: var(--label-3); animation: spin .8s linear infinite; }
+.bubble-big { width: 60px; height: 60px; border-radius: 50%; background: var(--fill); color: var(--label-3); display: flex; align-items: center; justify-content: center; margin-bottom: 2px; }
+.bubble-big svg { width: 28px; height: 28px; }
+.retry { background: none; border: none; color: var(--blue); font-size: 15px; padding: 8px 18px; }
+.error-text { color: var(--red); font-size: 14px; word-break: break-all; }
+/* ============ 记一笔按钮 ============ */
+.fab { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 15; height: 50px; padding: 0 26px; border: none; border-radius: 25px; background: var(--blue); color: #fff; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 8px 22px rgba(0, 122, 255, .35), 0 2px 6px rgba(0, 122, 255, .22); transition: transform .15s ease; }
+.fab:active { transform: translateX(-50%) scale(.96); }
+.fab svg { width: 17px; height: 17px; }
+/* ============ 弹层通用 ============ */
+.mask { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .35); opacity: 0; pointer-events: none; transition: opacity .25s; display: flex; align-items: flex-end; justify-content: center; }
+.mask.on { opacity: 1; pointer-events: auto; }
+/* ============ 记一笔（底部抽屉） ============ */
+.sheet { --accent: var(--blue); width: 100%; max-width: 560px; background: var(--card); border-radius: 28px 28px 0 0; padding: 6px 18px calc(16px + env(safe-area-inset-bottom)); max-height: calc(100% - 44px); overflow-y: auto; overscroll-behavior: contain; transform: translateY(100%); transition: transform .35s cubic-bezier(.32, .72, .35, 1); box-shadow: 0 -6px 32px rgba(0, 0, 0, .12); }
+.mask.on .sheet { transform: translateY(0); }
+.sheet.income { --accent: var(--green); }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--label-3); margin: 4px auto 2px; }
+.sheet-head { position: relative; display: flex; align-items: center; justify-content: center; height: 42px; }
+.sheet-cancel { position: absolute; left: -8px; top: 0; background: none; border: none; color: var(--blue); font-size: 16px; padding: 10px 8px; }
+.sheet-title { font-size: 17px; font-weight: 600; }
+.seg { display: flex; background: var(--fill); border-radius: 999px; padding: 3px; margin-bottom: 12px; }
+.seg button { flex: 1; border: none; background: transparent; height: 30px; border-radius: 999px; font-size: 14px; color: var(--label-2); }
+.seg button.on { background: var(--card); color: var(--accent); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, .12), 0 0 0 .5px rgba(0, 0, 0, .04); }
+.amount-box { display: flex; align-items: center; gap: 8px; background: var(--fill); border-radius: 24px; height: 62px; padding: 0 18px; margin-bottom: 10px; transition: box-shadow .15s; }
+.amount-box:focus-within { box-shadow: 0 0 0 1.5px var(--accent); }
+.amount-box .cur { font-size: 22px; font-weight: 600; color: var(--label-2); }
+#fAmount { flex: 1; min-width: 0; font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#fAmount::-webkit-outer-spin-button, #fAmount::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.fields { background: var(--fill); border-radius: 24px; margin-bottom: 16px; overflow: hidden; }
+.field { position: relative; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; }
+.field + .field::before { content: ''; position: absolute; left: 16px; right: 0; top: 0; height: .5px; background: var(--sep); }
+.field label { width: 74px; flex-shrink: 0; font-size: 15px; color: var(--label-2); }
+.field:focus-within label { color: var(--label); }
+.field input { flex: 1; min-width: 0; font-size: 15px; }
+/* Token 默认打码，右边给个「显示」开关 —— 打码界面看不清自己输对没有，
+     纯 password 反而逼人去别处核对。给个开关，两种需求都照顾到。 */
+.field .reveal-btn { flex-shrink: 0; font-size: 13px; color: var(--blue, #007AFF); padding: 6px 2px; }
+/* ============ 芯片式选择（分类 / 支付方式） ============ */
+/* 芯片块：标题 + 可横向滚动的选项行，替代原来的自由输入框。
+     常用项一下点中，冷门项走行尾的「自定义」入口，两边都不耽误。 */
+.chip-block { padding: 10px 0 2px; }
+.chip-head { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; margin-bottom: 8px; }
+.chip-head > span { font-size: 13px; color: var(--label-2); }
+/* 行尾的「自定义」文字按钮，选中的值不在预设里时会自动亮起 */
+.chip-custom-btn { background: none; border: none; padding: 2px 0; font-size: 13px; color: var(--accent); }
+.chip-custom-btn:active { opacity: .55; }
+/* 滚动的芯片行。负 margin 让芯片能贴到抽屉边缘，滚动时不显得被裁 */
+.chips { display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 2px 16px 8px; margin: 0 -18px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 14px; border: none; border-radius: 999px; background: var(--card); color: var(--label); font-size: 14px; font-weight: 500; white-space: nowrap; box-shadow: 0 0 0 .5px var(--sep); transition: transform .12s ease, background .15s, color .15s; }
+.chip:active { transform: scale(.95); }
+/* 选中态：用当前模式的强调色（支出蓝 / 收入绿）填充 */
+.chip.on { background: var(--accent); color: #fff; box-shadow: none; font-weight: 600; }
+/* 芯片里的小圆点：沿用分类图标的颜色，未选中时提示分类归属 */
+.chip .dot-c { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .85; flex-shrink: 0; }
+.chip.on .dot-c { background: #fff; opacity: 1; }
+/* 自定义输入行：默认不出现在布局里，点「自定义」才展开 */
+.chip-custom { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; background: var(--card); border-radius: 999px; padding: 0 14px; height: 36px; box-shadow: 0 0 0 1px var(--accent); }
+.chip-custom input { flex: 1; min-width: 0; font-size: 14px; }
+.chip-custom button { background: none; border: none; color: var(--accent); font-size: 14px; font-weight: 600; padding: 4px 0; }
+/* ============ 数据不完整警示条 ============ */
+.warn-bar { display: flex; align-items: flex-start; gap: 8px; background: rgba(255, 149, 0, .12); color: #B25E00; border-radius: 14px; padding: 10px 14px; font-size: 13px; line-height: 1.45; margin-bottom: 12px; }
+@media (prefers-color-scheme: dark) {
+  .warn-bar { color: #FFB340; }
+}
+.warn-bar svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1.5px; }
+/* ============ 日期快捷按钮 ============ */
+/* iOS 的 datetime-local 输入框不肯收缩（固有宽度大，min-width:0 也拦不住），
+     跟快捷按钮挤同一行会把按钮挤出容器、再被 .fields 的 overflow:hidden 裁掉。
+     所以时间字段固定两行：输入一行、按钮一行，谁也挤不到谁。 */
+.field-time { flex-wrap: wrap; height: auto; min-height: 48px; padding: 10px 16px; row-gap: 8px; }
+.field-time input[type='datetime-local'] { flex: 1 1 auto; min-width: 0; }
+.date-quick { display: flex; gap: 6px; flex: 0 0 100%; }
+.date-quick button { height: 28px; padding: 0 10px; border: none; border-radius: 999px; background: var(--card); color: var(--accent); font-size: 13px; font-weight: 500; box-shadow: 0 0 0 .5px var(--sep); }
+.date-quick button:active { opacity: .6; }
+/* 选中记录详情（删除确认用） */
+.as-detail { display: flex; align-items: center; gap: 10px; padding: 14px 16px; box-shadow: 0 .5px 0 var(--sep); }
+.as-detail .ad-ic { width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.as-detail .ad-ic svg { width: 18px; height: 18px; }
+.as-detail .ad-t { font-size: 15px; font-weight: 600; }
+.as-detail .ad-s { font-size: 13px; color: var(--label-2); margin-top: 1px; }
+.btn { display: flex; align-items: center; justify-content: center; width: 100%; height: 50px; border: none; border-radius: 999px; font-size: 16px; font-weight: 600; transition: transform .15s ease, opacity .15s; }
+.btn:active { transform: scale(.98); }
+.btn:disabled { opacity: .5; }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-tint { background: rgba(0, 122, 255, .12); color: var(--blue); }
+.sheet .btn-primary { background: var(--accent); }
+.del-entry { display: block; width: 100%; height: 44px; background: none; border: none; color: var(--red); font-size: 15px; font-weight: 500; margin-top: 4px; }
+.del-entry:active { opacity: .55; }
+.msg { text-align: center; font-size: 13px; color: var(--label-2); padding: 12px 0 0; min-height: 18px; margin: 0; }
+.msg.error { color: var(--red); }
+/* ============ 删除确认（iOS 操作弹层） ============ */
+#delMask { z-index: 30; }
+.as-wrap { width: 100%; max-width: 560px; padding: 0 10px calc(10px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; transform: translateY(100%); transition: transform .3s cubic-bezier(.32, .72, .35, 1); }
+.mask.on .as-wrap { transform: translateY(0); }
+.as-card { background: var(--card); border-radius: 22px; overflow: hidden; box-shadow: var(--card-edge); }
+.as-title { padding: 13px 16px; font-size: 13px; color: var(--label-2); text-align: center; box-shadow: 0 .5px 0 var(--sep); }
+.as-btn { display: block; width: 100%; height: 54px; background: none; border: none; font-size: 17px; color: var(--blue); }
+.as-btn:active { background: var(--fill); }
+.as-btn:disabled { opacity: .5; }
+.as-btn.danger { color: var(--red); font-weight: 600; }
+/* ============ 配置页 ============ */
+.setup { max-width: 420px; padding-top: calc(env(safe-area-inset-top) + 52px); }
+.app-logo { width: 72px; height: 72px; border-radius: 24px; background: linear-gradient(160deg, #0A84FF, #0057D8); color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; box-shadow: 0 10px 26px rgba(10, 100, 255, .35); }
+.app-logo svg { width: 34px; height: 34px; }
+.setup-title { font-size: 24px; font-weight: 700; letter-spacing: -.3px; text-align: center; margin: 0 0 6px; }
+.setup-sub { font-size: 14px; color: var(--label-2); text-align: center; margin: 0 0 24px; }
+.setup-card { margin-bottom: 16px; }
+.setup-card .field { height: 54px; }
+.setup .btn + .btn { margin-top: 10px; }
+.text-btn { display: block; margin: 16px auto 0; background: none; border: none; color: var(--label-2); font-size: 14px; padding: 8px; }
+/* ============ 轻提示 ============ */
+.toast { position: fixed; top: calc(env(safe-area-inset-top) + 58px); left: 50%; z-index: 40; transform: translateX(-50%) translateY(-8px); background: rgba(32, 32, 34, .85); color: #fff; font-size: 14px; line-height: 1.4; padding: 9px 18px; border-radius: 999px; max-width: 86vw; text-align: center; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.err { background: rgba(210, 55, 42, .92); }
+/* ============ 明细页搜索 / 筛选 ============ */
+.search-bar { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 18px; box-shadow: var(--card-edge); height: 44px; padding: 0 14px; }
+.search-bar svg { width: 16px; height: 16px; color: var(--label-3); flex-shrink: 0; }
+.search-bar input { flex: 1; min-width: 0; font-size: 15px; }
+.search-clear { flex-shrink: 0; height: 26px; padding: 0 10px; border: none; border-radius: 999px; background: var(--fill); color: var(--label-2); font-size: 12px; }
+.search-clear:active { background: var(--press); }
+.filter-chips { display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 10px 2px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.filter-chips::-webkit-scrollbar { display: none; }
+.f-chip { flex: 0 0 auto; height: 30px; padding: 0 13px; border: none; border-radius: 999px; background: var(--card); color: var(--label-2); font-size: 13px; box-shadow: 0 0 0 .5px var(--sep); transition: background .15s, color .15s; }
+.f-chip:active { opacity: .6; }
+.f-chip.on { background: var(--label); color: var(--bg); font-weight: 600; box-shadow: none; }
+/* ============ 预算进度条 ============ */
+.budget { margin: 12px 4px 0; }
+.budget-top { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--label-2); margin-bottom: 6px; }
+.budget-top b { color: var(--label); font-weight: 600; font-variant-numeric: tabular-nums; }
+.budget-track { height: 8px; border-radius: 4px; background: var(--fill); overflow: hidden; }
+.budget-fill { height: 100%; width: 0; border-radius: 4px; background: var(--blue); transition: width .4s ease, background .2s; }
+.budget-fill.warn { background: #FF9500; }
+.budget-fill.over { background: var(--red); }
+/* ============ 环比提示 ============ */
+.hero-trend { font-size: 13px; color: var(--label-2); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.hero-trend b.up { color: var(--red); font-weight: 600; }
+.hero-trend b.down { color: var(--green); font-weight: 600; }
+.hero-trend .trend-sub { color: var(--label-3); margin-left: 4px; }
+/* ============ 本月看点（统计页洞察） ============ */
+.insight-row { display: flex; align-items: flex-start; gap: 9px; padding: 8px 2px; font-size: 13.5px; line-height: 1.5; }
+.insight-row + .insight-row { box-shadow: 0 .5px 0 var(--sep); }
+.insight-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); margin-top: 6px; flex-shrink: 0; }
+.insight-row .hl { font-weight: 600; }
+.insight-row .hl.bad { color: var(--red); }
+.insight-row .hl.ok { color: var(--green); }
+/* ============ 无障碍 / 减弱动效 ============ */
+button:focus-visible, .item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body data-page-node-id="My4A2UAg4lSnAWkA3lE024">
+
+<!-- 顶部导航：滚动后浮现毛玻璃与小标题 -->
+<nav class="nav" id="nav" hidden data-page-node-id="NtWPQ2vPQTqZkoJNzG9bM9">
+  <div class="nav-title" id="navTitle" data-page-node-id="aUuXYZyXbrTekuc0Irf92n">账本</div>
+  <div class="nav-actions" data-page-node-id="vQeYRB5vnGmcD7clbf6rIj">
+    <button class="icon-btn" id="refresh" aria-label="刷新数据" data-page-node-id="D3xLEtc3IdgTcEbKjtwgjx">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="5ydn6XROtlXyNYibR64OAd"><polyline points="23 4 23 10 17 10" data-page-node-id="qaagnMRzhfdWd59jt70GRJ"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" data-page-node-id="Bg0lODE8C11NqaWLudi7bb"/></svg>
+    </button>
+    <button class="icon-btn" id="resetting" aria-label="设置" data-page-node-id="dDWOO7RDs2G3N12FZSb7YN">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="Y55AQmleAFWlvBcdfGJVWT"><circle cx="12" cy="12" r="3" data-page-node-id="3GS8QISzBsG19hbU1uRSIU"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" data-page-node-id="lvO6b78EZhZ7xfD6AvCNk3"/></svg>
+    </button>
+  </div>
+</nav>
+
+<!-- 主页 -->
+<div class="wrap page" id="main" hidden data-page-node-id="oCxxDzHAGgmMDmjVPPDvII">
+  <h1 class="large-title" id="largeTitle" data-page-node-id="cMnWhfrydW7FHDVbrV8d16">账本</h1>
+
+  <div class="page-seg" id="viewSeg" data-page-node-id="lR03QWyDT0gozrPBAo3kTi">
+    <button class="on" data-view="list" type="button" data-page-node-id="BrmhjZjCdgTl0wDD12H1gE">明细</button>
+    <button data-view="stats" type="button" data-page-node-id="XEaolOV1SxZhLLFZTJaLGJ">统计</button>
+  </div>
+
+  <div id="viewList" data-page-node-id="8jExafyNnnx2XtabI4tbdE">
+    <section class="hero" id="heroCard" title="点按查看支出构成" data-page-node-id="AIb2xl7zHxC5s7V0yJ5DMF">
+      <div class="hero-label" data-page-node-id="Z9ho3YFniUHMNHS81Bk74Z">本月支出<span class="hero-link" data-page-node-id="Bi5xCM3sAcVup0QVrBsRVd">构成 ›</span></div>
+      <div class="hero-amount" id="total" aria-live="polite" data-page-node-id="PSjBfX11BqEjl9luFqeeZf">¥ --</div>
+      <div class="hero-sub" data-page-node-id="KZw4WUX7xJ4kt3c4BUlZkO">收入 <b id="statIncome" data-page-node-id="dscVVnOQKeeHrPAIKFimjn">--</b> · 本月 <b id="statCount" data-page-node-id="K8uHpZ0CDZQyAsEAGOYnRh">--</b></div>
+      <div class="hero-trend" id="statTrend" hidden data-page-node-id="KhksOMic0GCCQKJjBYNTCd"></div>
+      <div class="budget" id="budgetBox" hidden data-page-node-id="OH872dbIkIkotAOosGt1Vf">
+        <div class="budget-top" data-page-node-id="VzyzFyBwi7owQgZJE4C7Bu"><span data-page-node-id="1GWHUHmwbwXHe3alV5zXTJ">月度预算</span><span id="budgetText" data-page-node-id="f2KzMwuR97gRAatnmED63F"></span></div>
+        <div class="budget-track" data-page-node-id="P2MRwqWE8m63okXauxDTEF"><div class="budget-fill" id="budgetFill" data-page-node-id="AHK1vaJUovBZb5qck8FAim"></div></div>
+      </div>
+    </section>
+
+    <div class="search-bar" data-page-node-id="ODQaaCwjEd1at8YVXyjt91">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="RXwgtQ1c0firylvZFPcupq"><circle cx="11" cy="11" r="7" data-page-node-id="tUfEBB1JGedGCzHvQr8vjs"/><line x1="21" y1="21" x2="16.5" y2="16.5" data-page-node-id="Ly39sMBNr1Nxds7UlXjcVt"/></svg>
+      <input id="searchInput" placeholder="搜备注、分类、金额…" autocomplete="off" data-page-node-id="oWqU01xpS31xQTHawOJGWu">
+      <button class="search-clear" id="searchClear" type="button" hidden data-page-node-id="hgyFGDjP8QxoMvYIuwV1D4">清除</button>
+    </div>
+    <div class="filter-chips" id="filterChips" data-page-node-id="DWTCLf0GHmftzGG2xG6YRF"></div>
+
+    <div class="section-head" data-page-node-id="zCgkhwSeO2DhWJ6WGBkvhU">
+      <span data-page-node-id="xrsqsC3jm6I4UKVpek3ku5">最近记录</span>
+      <span id="recordCount" data-page-node-id="PViWTJuy20H8cJcR7Lxaqe"></span>
+    </div>
+    <div id="list" data-page-node-id="KCIHVb2HFHPc5WcdC8wV4T"></div>
+  </div>
+
+  <div id="viewStats" hidden data-page-node-id="0LijE4FY7Rd4y965r0S4f4">
+    <div class="warn-bar" id="truncWarn" hidden data-page-node-id="POtjc3f2495mG5soPTmhaH">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="9Ygbwu83vB1aXFHzjVZtpB"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" data-page-node-id="TpYKuX5uhoJ7LFZmApEO5g"/><line x1="12" y1="9" x2="12" y2="13" data-page-node-id="ifFD78EFTXq3PtirNGLyz3"/><line x1="12" y1="17" x2="12.01" y2="17" data-page-node-id="vFuKKwV9fvCBa9zcGGjwwz"/></svg>
+      <div id="truncWarnText" data-page-node-id="qcUHg7lutbCJbgqUMFjB0v"></div>
+    </div>
+
+    <div class="month-nav" data-page-node-id="71j9EppX7I7W8HiRBNQz58">
+      <!-- 初始不给 disabled：真正的禁用状态由 updateMonthNav 决定，
+           写死 disabled 会让首帧短暂点不动 -->
+      <button class="m-btn" id="mPrev" aria-label="上个月" data-page-node-id="oXEsjYHr1PU7GsiCj0KNOh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="2yCXUbhkK3CeHUxs4hKqLV"><polyline points="15 18 9 12 15 6" data-page-node-id="d1LMmT08VqwVj2PnF4yk90"/></svg>
+      </button>
+      <div class="m-label" id="mLabel" data-page-node-id="ZMzbewLqm4PYz5DGHpWGJb">--</div>
+      <button class="m-btn" id="mNext" aria-label="下个月" disabled data-page-node-id="5TZ6yNJiYNR9OlNxcrJEGu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="SkrXARqdJG0UKVcs9jBXcb"><polyline points="9 18 15 12 9 6" data-page-node-id="qq94ZExqYoTl6LLyubFQ8O"/></svg>
+      </button>
+    </div>
+    <!-- 翻离本月后出现，一键回本月 -->
+    <button class="m-back" id="mBack" type="button" hidden data-page-node-id="FEGD3lU6slDi6Lmy5wUm9B">回到本月</button>
+
+    <div class="stat-cards" data-page-node-id="8bNXC9WHjyjvsrdnwtsIvA">
+      <div class="stat-chip" data-page-node-id="11AbEakGWCmUA0oaoDoDrO"><div class="sc-label" data-page-node-id="ruTFxXLAJIGdvxmFyiZ6M9">支出</div><div class="sc-val" id="stExp" data-page-node-id="dCsFi7QDmXqN8GO3E22u4F">--</div></div>
+      <div class="stat-chip" data-page-node-id="7LBvtz0ISNCPwZY6AY62p5"><div class="sc-label" data-page-node-id="gBVuHhnqK7WzZB7OHOYIqs">收入</div><div class="sc-val pos" id="stInc" data-page-node-id="tIL2Gtj1Ljj49MkCb4qaeD">--</div></div>
+      <div class="stat-chip" data-page-node-id="zzxWCw3upG3h4UjE61bim2"><div class="sc-label" data-page-node-id="75HKP1mPTv1QHO3s5AZXgy">结余</div><div class="sc-val" id="stBal" data-page-node-id="3xgvuzaTsZWo38UcuRP8nT">--</div></div>
+    </div>
+
+    <!-- 该月无记录时的占位，由 renderStats 控制显隐 -->
+    <div class="month-empty" id="monthEmpty" hidden data-page-node-id="RbSPoOy9tIeHnELRoV9G6f"></div>
+
+    <!-- 本月看点：最大单笔、分类环比异常等一句话洞察 -->
+    <div class="chart-card" id="insightCard" hidden>
+      <div class="cc-head" id="insightTitle">本月看点</div>
+      <div id="insightList"></div>
+    </div>
+
+    <div class="chart-card" id="donutCard" data-page-node-id="3fugEk9xOFGArIbGrnoBdf">
+      <div class="cc-head" data-page-node-id="L9DlnQvXQXsPdOH42AMIsi">分类占比<span class="cc-sub" data-page-node-id="GWElBYzRug4l9GOBa5tNu0">点按分类查看</span></div>
+      <div class="donut-box" id="donutBox" data-page-node-id="EiI3waIiPUqbuRHwz6c54a">
+        <svg viewBox="0 0 200 200" role="img" aria-label="本月支出分类占比图" data-page-node-id="zR025YxnGsbdUL19nemMRE"></svg>
+        <div class="donut-center" id="donutCenter" data-page-node-id="cKMyDJnwDfEuj7tfi88Gnk"></div>
+      </div>
+      <div id="donutLegend" data-page-node-id="iMiWWFhzCTq6CdJ3KPqWJ1"></div>
+    </div>
+
+    <!-- 收入构成：和支出占比同款交互，当月有收入才显示 -->
+    <div class="chart-card" id="incCard" hidden>
+      <div class="cc-head">收入构成<span class="cc-sub">点按分类查看</span></div>
+      <div class="donut-box" id="incBox">
+        <svg viewBox="0 0 200 200" role="img" aria-label="本月收入构成图"></svg>
+        <div class="donut-center" id="incCenter"></div>
+      </div>
+      <div id="incLegend"></div>
+    </div>
+
+    <div class="chart-card" id="dailyCard" data-page-node-id="v7FWLF6vGbfM7D1r8uY8po">
+      <div class="cc-head" data-page-node-id="9qa2GVVCEldCf7btNQ9q55">每日支出<span class="cc-sub" id="dailyCap" data-page-node-id="USJVGtFGe53C3uZDO5hTqp"></span></div>
+      <div id="dailyBox" data-page-node-id="zfRhpBGBCOGo2hIrlSxlzG"></div>
+    </div>
+
+    <div class="chart-card" id="monthlyCard" data-page-node-id="KjDWg2Jq6rfQfMSfsVvCT3">
+      <div class="cc-head" data-page-node-id="ShUnkCnqQ7NZDgIcrADUvd">近 6 个月<span class="cc-sub" data-page-node-id="GUHbTlrLP4WvbDnwGDH32h"><i class="dot e" data-page-node-id="niTPYnt5TRC0HGUg2ZpPHl"></i>支出<i class="dot i" data-page-node-id="jpmG2dFdbKkMewxcHqIvmH"></i>收入</span></div>
+      <div id="monthlyBox" data-page-node-id="xu1hy2hsUDyHsYkg3E5nIy"></div>
+      <div class="chart-cap" id="monCap" data-page-node-id="OpSLkH5ayiUQYhbSrfTvRr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 首次配置页 -->
+<div class="wrap setup" id="setup" hidden data-page-node-id="bgYi4ZQ68DSMNutEnPmXxs">
+  <div class="app-logo" data-page-node-id="ucAH4UqsqrUTreRibY9xnS">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="LKT22STPYWhEwnMntqjU8x"><path d="M6 2h12v20l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5V2z" data-page-node-id="c8gsUDQYRyX5b39Tfbtf7u"/><line x1="9.5" y1="7" x2="14.5" y2="7" data-page-node-id="UKbtWiI8acfz1KYyyb03xK"/><line x1="9.5" y1="11" x2="14.5" y2="11" data-page-node-id="7WqRQecDTpOmohP30gEik4"/></svg>
+  </div>
+  <h2 class="setup-title" data-page-node-id="fsRBcZjlqJn8ucnAo6ENhO">连接你的账本</h2>
+  <p class="setup-sub" data-page-node-id="6bHC04eJ9SdrxAu9IB1mPI">填一次接口信息，之后会自动记住</p>
+
+  <div class="card setup-card" data-page-node-id="CT3XPabAF2nWANxgtqRYsV">
+    <div class="field" data-page-node-id="YKPDIguYX65EPjnGXoYZHV">
+      <label for="cfgApi" data-page-node-id="4Tl8rFmwI9omegwTHJ9cUc">API 地址</label>
+      <input id="cfgApi" placeholder="https://ledger-api.xxx.workers.dev" autocapitalize="off" autocorrect="off" spellcheck="false" data-page-node-id="qLjzVaV77AAIJjHxxXytoC">
+    </div>
+    <div class="field" data-page-node-id="8CbmEqx5osCnf5MlSsCBDg">
+      <label for="cfgToken" data-page-node-id="UcfV5pwvVSnfm4obSfTJkk">Token</label>
+      <input id="cfgToken" type="password" placeholder="你的 API Token" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" data-page-node-id="4pTwrGTnX9xWFHcIBvGbIb">
+      <button class="reveal-btn" id="cfgTokenEye" type="button" aria-label="显示 Token" data-page-node-id="D0AO6WrtQ3mkqzXwrmVyWi">显示</button>
+    </div>
+    <div class="field" data-page-node-id="9pb94zZ2tecSaDY0vyhYEM">
+      <label for="cfgBudget" data-page-node-id="QI4Tt3f6cepQo9nsJofDJd">月预算</label>
+      <input id="cfgBudget" type="number" inputmode="decimal" placeholder="选填，如 3000" autocomplete="off" data-page-node-id="7oCzh6FbUbZI4QFFPIuyar">
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="cfgSave" data-page-node-id="qQNu3FkkC5Er7Rzeo3vhAO">保存并加载</button>
+  <button class="text-btn" id="exportBtn" type="button" hidden data-page-node-id="8d1pXSueEv60sRONKToVWb">导出全部记录（CSV）</button>
+  <button class="text-btn" id="setupBack" hidden data-page-node-id="oPE9srCrAGnf0eN85jIFm2">返回账本</button>
+  <p class="msg" id="cfgMsg" data-page-node-id="iH1DAomIvKwYPQpr0gaWZ3"></p>
+</div>
+
+<!-- 悬浮的记一笔按钮 -->
+<button class="fab" id="fab" hidden data-page-node-id="hCT4MiG9kOpcsUE0D8WUln">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" data-page-node-id="XhAq12M2mZ9k2cfV4yZj1Q"><path d="M12 5v14" data-page-node-id="TwDLFQvkCpRxfgW9btp9Xs"/><path d="M5 12h14" data-page-node-id="96R5OK06n49kj6aWcR4I9e"/></svg>
+  记一笔
+</button>
+
+<!-- 记一笔抽屉 -->
+<div class="mask" id="mask" data-page-node-id="KM92SHvgeYkXXccsFpyEFe">
+  <div class="sheet" id="addSheet" data-page-node-id="pLxcBAVaAuUpgpvuqgS304">
+    <div class="grabber" data-page-node-id="Kabq86afXCfACbSQKC3fc7"></div>
+    <div class="sheet-head" data-page-node-id="0wYGeuDy5jSfR6gIIPPBHL">
+      <button class="sheet-cancel" id="cancel" data-page-node-id="ydLCnkETTWHK3mwvr6Ndxu">取消</button>
+      <div class="sheet-title" id="sheetTitle" data-page-node-id="Uo38gmYsMcP2UpnnBwxFg4">记一笔</div>
+    </div>
+
+    <div class="seg" id="typeSeg" data-page-node-id="PHjHtX63XCiNNxQsGDVKEf">
+      <button class="on" data-type="expense" type="button" data-page-node-id="OBkF1FF5xj5PzebRmnrj4d">支出</button>
+      <button data-type="income" type="button" data-page-node-id="f2kB7Rtp5ULAWhqDauRWz1">收入</button>
+    </div>
+
+    <div class="amount-box" data-page-node-id="qbbMZ7fzJEFyWpctWKy0Hd">
+      <span class="cur" data-page-node-id="k4K7rpKHBcBf6mmLaDM0iH">¥</span>
+      <input id="fAmount" type="number" inputmode="decimal" placeholder="0.00" autocomplete="off" data-page-node-id="wcKlAxHp8bqFRrWXuiNj3U">
+    </div>
+
+    <div class="fields" data-page-node-id="inLbYQDcPsiONKvdgziCEM">
+      <div class="field field-time" data-page-node-id="Rmm65gjO7yjHDbaXH83mJU">
+        <label for="fTime" data-page-node-id="asD0EQXHJnKCZEoYhXvBTK">时间</label>
+        <input id="fTime" type="datetime-local" data-page-node-id="2SxFd9zdM6HGdJfgj8MTRy">
+        <div class="date-quick" data-page-node-id="VH96CBLEeDjfDv6iyCAiOz">
+          <button type="button" id="qToday" data-page-node-id="Ufpw2HXdo0mZS8sJAMbz85">今天</button>
+          <button type="button" id="qYesterday" data-page-node-id="UOKUl4APKeFCBe4x5K4vUz">昨天</button>
+        </div>
+      </div>
+      <div class="field" data-page-node-id="VFd9X4pF8gwhTYJf738FqY">
+        <label for="fNote" data-page-node-id="H29stkedvkzN76E8xibMIq">备注</label>
+        <input id="fNote" placeholder="选填，如 沙县小吃" data-page-node-id="lbWz4NUrD4bWTRiihfbSWR">
+      </div>
+    </div>
+
+    <!-- 分类：芯片式。常用项点一下选中，冷门项走「自定义」 -->
+    <div class="chip-block" id="catBlock" data-page-node-id="gXHm4mg4tagPlKpLYa9goe">
+      <div class="chip-head" data-page-node-id="M5cKYKzmWrJP3mD96RPpAQ">
+        <span id="catLabel" data-page-node-id="fxPrzJGAMfUYhm1E6DFQbl">分类</span>
+        <button class="chip-custom-btn" id="catCustomBtn" type="button" data-page-node-id="0gLu6uQ8WyvCE72bg6nT9E">自定义…</button>
+      </div>
+      <div class="chips" id="catChips" data-page-node-id="31XroBFEHAkSM1UrFEUNWj"></div>
+      <div class="chip-custom" id="catCustom" hidden data-page-node-id="L8EWW5PI9vgibqxNCdB98v">
+        <input id="catCustomInput" placeholder="输入自定义分类" maxlength="10" data-page-node-id="B6UoRHGnv1qbn934ZAyens">
+        <button type="button" id="catCustomOk" data-page-node-id="sLmy41FqV21NOm7oYeDqkJ">确定</button>
+      </div>
+      <!-- 真实值存这里，提交时读它，跟原来的 fCategory 语义一致 -->
+      <input type="hidden" id="fCategory" data-page-node-id="FEZ5XcaqfhQY16kSwdV9jD">
+    </div>
+
+    <!-- 支付方式：芯片式。收入模式下标题变「到账方式」 -->
+    <div class="chip-block" id="acctBlock" data-page-node-id="sfZB7dF8DssdO8MPD8Fn9H">
+      <div class="chip-head" data-page-node-id="SZIL263EMYYi8egyZZpELO">
+        <span id="accountLabel" data-page-node-id="WEpVjjyBHY2rxk08Y8PYbG">支付方式</span>
+        <button class="chip-custom-btn" id="acctCustomBtn" type="button" data-page-node-id="7wZf83le3LVqqp8ADoCbuC">自定义…</button>
+      </div>
+      <div class="chips" id="acctChips" data-page-node-id="je7vWjtxTQS4AoXLhsXCpI"></div>
+      <div class="chip-custom" id="acctCustom" hidden data-page-node-id="uj5pNz4ktsBAmMDA7Kgl0W">
+        <input id="acctCustomInput" placeholder="输入自定义方式" maxlength="10" data-page-node-id="qvIv62q6JwB2ka5D7Ozpbh">
+        <button type="button" id="acctCustomOk" data-page-node-id="VmUuP7kE8ybXuyOKN4G9fp">确定</button>
+      </div>
+      <input type="hidden" id="fAccount" data-page-node-id="337IcQYKIlcm07qmrJTSgf">
+    </div>
+
+    <button class="btn btn-primary" id="save" data-page-node-id="P4D9cQDE3xaM2iVCIJ3z0q">保存</button>
+    <button class="del-entry" id="delEntry" hidden data-page-node-id="j8QezrFxwMedLVD9mFenQy">删除记录</button>
+    <p class="msg" id="formMsg" data-page-node-id="dk8rANaSvoWn6p6ODYsKWL"></p>
+  </div>
+</div>
+
+<!-- 删除确认（iOS 操作弹层） -->
+<div class="mask" id="delMask" data-page-node-id="WG92ZMikFAAJgCAemnkvbC">
+  <div class="as-wrap" data-page-node-id="u551zE7rZnaTGHoDv3ISLM">
+    <div class="as-card" data-page-node-id="IZg69ysIVviXU64YccM6VF">
+      <div class="as-title" data-page-node-id="YpAjNo4UpNU0SIPIHp0Cav">这条记录将被删除，且无法恢复</div>
+      <div class="as-detail" id="delDetail" data-page-node-id="B1SMglDVMUpINMDLZzaQmp"></div>
+      <button class="as-btn danger" id="delConfirm" data-page-node-id="GewRWif294cby8PgWSn5Wv">删除记录</button>
+    </div>
+    <div class="as-card" data-page-node-id="D26JsXeeWPolT5D23VD0SQ">
+      <button class="as-btn" id="delCancel" data-page-node-id="skBp1OpaPubSJbOQiHznAt">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 轻提示 -->
+<div class="toast" id="toast" role="status" data-page-node-id="P1TFlsFtQVpJDgAb5RNA4S"></div>
+
+<script>
+/* ================= 禁用手势缩放 =================
+   viewport 的 user-scalable=no 在新版 iOS Safari 上会被忽略，得从事件层兜。
+   三条路都要堵：双指捏合(gesturestart/change/end)、双击放大、以及
+   Safari 的双指缩放(gesture*)。全部 preventDefault。 */
+['gesturestart', 'gesturechange', 'gestureend'].forEach(function (type) {
+  document.addEventListener(type, function (e) { e.preventDefault(); }, { passive: false });
+});
+
+/* 双击缩放：iOS 上双击会触发缩放。用一个 300ms 内的连续两次 touchend 判定，
+   真命中就 preventDefault。注意别把正常的单击/双击交互误伤 ——
+   只在两次点击间隔极短且位置几乎相同时才拦。 */
+let lastTap = 0;
+let lastTapX = 0, lastTapY = 0;
+document.addEventListener('touchend', function (e) {
+  /* 落在「本来双击就有意义」的东西上就不管：输入框要选词、
+     链接/按钮要连点、可选中的文本要选字。宁可漏拦一次缩放，
+     也不要把页面里正常的双击交互弄坏。 */
+  const el = e.target;
+  if (el && (el.closest('input, textarea, select, a, button, label, [contenteditable]') ||
+             el.isContentEditable)) return;
+  const now = Date.now();
+  const t = e.changedTouches && e.changedTouches[0];
+  if (!t) return;
+  const dx = Math.abs(t.clientX - lastTapX);
+  const dy = Math.abs(t.clientY - lastTapY);
+  /* 300ms 内、位移小于 30px，判为双击 → 拦掉 */
+  if (now - lastTap < 300 && dx < 30 && dy < 30) {
+    e.preventDefault();
+    lastTap = 0;
+  } else {
+    lastTap = now;
+    lastTapX = t.clientX;
+    lastTapY = t.clientY;
+  }
+}, { passive: false });
+
+/* 双指触摸直接拦 —— 有些安卓浏览器不走 gesture* 事件 */
+document.addEventListener('touchmove', function (e) {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+/* 双指按下也拦：避免 iOS 从"双指"进入缩放态 */
+document.addEventListener('touchstart', function (e) {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+/* 桌面浏览器 Ctrl+滚轮缩放也顺手挡掉，保持体验一致 */
+document.addEventListener('wheel', function (e) {
+  if (e.ctrlKey) e.preventDefault();
+}, { passive: false });
+
+/* ================= 配置与状态 ================= */
+const LS_KEY = 'ledger_cfg_v1';
+let cfg = null;
+let records = [];
+/* 「先建后删」降级里删失败的旧记录 id。加载新数据时清空 ——
+   下一次从服务端拉的才是真实状态，本地隐藏只是过渡手段 */
+let droppedIds = new Set();
+let formType = 'expense';
+let pendingDeleteId = null;
+let toastTimer = null;
+let view = 'list';        // 明细 / 统计
+let statYm = null;        // 统计视图正在查看的月份 {y, m}
+let selCat = null;        // 占比图选中的分类
+let selIncCat = null;     // 收入构成图选中的分类
+let selDay = null;        // 每日图选中的日期
+let selMon = null;        // 月度图选中的月份
+let editingId = null;     // 正在编辑的记录 id（null = 新增）
+let dataTruncated = false; // 列表是否被服务端截断（统计可能不完整）
+let filterText = '';       // 明细页搜索关键词
+let filterCat = null;      // 明细页分类筛选（null = 全部）
+
+/* ================= 预设选项 =================
+   分类严格对齐后端 AI 的 10 个取值（见 Worker 里的 SYSTEM_PROMPT），
+   否则 AI 记的账和手动记的账会分到不同桶里，统计对不上。
+   label 后面可选带 dot：芯片上的小圆点颜色，沿用图标色。 */
+const CAT_EXPENSE = [
+  { v: '餐饮', dot: '#FF9500' },
+  { v: '交通', dot: '#007AFF' },
+  { v: '购物', dot: '#FF2D55' },
+  { v: '娱乐', dot: '#AF52DE' },
+  { v: '居住', dot: '#30B0C7' },
+  { v: '医疗', dot: '#FF3B30' },
+  { v: '通讯', dot: '#5856D6' },
+  { v: '教育', dot: '#A2845E' },
+  { v: '人情', dot: '#FFCC00' },
+  { v: '其他', dot: '#8E8E93' },
+];
+
+/* 收入侧的分类后端统一归「其他」，但手动记账时列几个常用的更顺手。
+   它们最终仍以文本存库，统计时按「其他」口径看即可。 */
+const CAT_INCOME = [
+  { v: '工资' }, { v: '奖金' }, { v: '红包' }, { v: '理财' }, { v: '报销' }, { v: '退款' }, { v: '其他' },
+];
+
+/* 收入构成的饼图配色。后端收入侧没有固定 10 类口径，这里给常用的
+   收入类型各配一个色，没认出来的走收入绿。 */
+const INC_COLORS = {
+  '工资': '#34C759',
+  '奖金': '#FF9500',
+  '红包': '#FF3B30',
+  '理财': '#5856D6',
+  '报销': '#007AFF',
+  '退款': '#30B0C7',
+  '其他': '#8E8E93',
+};
+
+/* 支付方式。按使用频率排序，前几个一眼就能点中 */
+const ACCOUNTS_EXPENSE = [
+  { v: '微信' }, { v: '支付宝' }, { v: '银行卡' }, { v: '现金' }, { v: '信用卡' }, { v: '云闪付' },
+];
+const ACCOUNTS_INCOME = [
+  { v: '微信' }, { v: '支付宝' }, { v: '银行卡' }, { v: '现金' },
+];
+
+const $ = (id) => document.getElementById(id);
+
+/* 预算只认「大于 0 的有限数字」，其余一律当没设 */
+function sanitizeBudget(v) {
+  const n = Number(v);
+  return (Number.isFinite(n) && n > 0) ? n : null;
+}
+function loadCfg() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return null;
+    if (typeof raw.api !== 'string' || typeof raw.token !== 'string') return null;
+    return { api: raw.api.trim(), token: raw.token.trim(), budget: sanitizeBudget(raw.budget) };
+  } catch { return null; }
+}
+function saveCfg(c) {
+  localStorage.setItem(LS_KEY, JSON.stringify({
+    api: String((c && c.api) || '').trim(),
+    token: String((c && c.token) || '').trim(),
+    budget: sanitizeBudget(c && c.budget) || '',
+  }));
+}
+
+/* 校验一个配置里的 api 是否可用：必须是 http/https 的合法绝对地址。
+   挡的是 javascript:、data:、vbscript: 这类会被当脚本/内联内容执行的伪协议 ——
+   它们一旦写进 localStorage 再被拿去做 fetch 目标，等于把注入点留在了配置里。 */
+function isValidApiUrl(u) {
+  if (!u) return false;
+  let parsed;
+  try { parsed = new URL(u); } catch { return false; }
+  return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+}
+
+/* 支持用带参数的链接配好 API 地址，例如：
+   https://xxx.pages.dev/#api=https://yyy.workers.dev
+   配好后立刻从地址栏抹掉。
+
+   这里**刻意不接受链接里传 token**。原因：URL 会进浏览器历史、会被截图、
+   会被分享转发、会同步到别的设备 —— 把凭证写在 URL 里，等于把它撒得到处都是。
+   API 地址不是秘密，传它只是省得手打一长串域名；token 必须自己输。 */
+(function autoConfigFromUrl() {
+  const fromHash = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const fromQuery = new URLSearchParams(location.search);
+  const api = fromHash.get('api') || fromQuery.get('api');
+  if (!api) return;
+  if (!isValidApiUrl(api)) {
+    history.replaceState(null, '', location.pathname);
+    return;
+  }
+  const cur = loadCfg() || {};
+  /* 只更新 api，token 保持原样（没有就留空，等用户自己填） */
+  saveCfg({ api: api, token: cur.token || '' });
+  history.replaceState(null, '', location.pathname);
+})();
+
+/* ================= 格式化 ================= */
+
+/* 金额一律走「分」中转。浮点直接累加会在几十笔后攒出 0.0000000001 这类
+   尾差（0.1+0.2=0.30000000000000004 的老问题），虽然显示时看不出，
+   但结余、占比、日均这些二次运算会把它放大。 */
+function toCents(v) {
+  const n = Number(v);
+  /* null / '' / NaN / Infinity 一律返回 null，让调用方自己决定跳过还是报错。
+     返回 0 是危险的 —— 会把「没填金额」静默算成「花了 0 元」。 */
+  if (v === null || v === undefined || v === '' || !Number.isFinite(n)) return null;
+  return Math.round(n * 100);
+}
+function fromCents(c) { return (Number(c) || 0) / 100; }
+
+function fmtMoney(n) {
+  /* 后端可能回 null / 空串 / 非数字，别让它显示成 ¥NaN 或 ¥Infinity */
+  const v = Number(n);
+  if (n === null || n === undefined || n === '' || !Number.isFinite(v)) return '--';
+  return v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function money(n) { return '¥' + fmtMoney(n); }
+function pad(x) { return String(x).padStart(2, '0'); }
+const WD = ['日', '一', '二', '三', '四', '五', '六'];
+const MN = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+
+function fx(n) { return Math.round(n * 10) / 10; }
+function fmtShort(n) {
+  n = Number(n) || 0;
+  if (n >= 100000) return Math.round(n / 10000) + '万';
+  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+  /* 小于 1 的刻度（niceStep 现在会给 0.01~0.5）四舍五入成整数就全变 0 或 1，
+     一排网格线标着 "0 0 0 1" 等于没标。带小数位显示。 */
+  if (n > 0 && n < 1) return n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return String(Math.round(n));
+}
+function fmtPct(p) { return (p >= 99.95 ? 100 : p >= 10 ? p.toFixed(0) : p.toFixed(1)) + '%'; }
+function niceStep(maxV) {
+  /* 步长从 0.01 起 —— 原来是 1 起。金额可以小到分（0.01 元），
+     一整个月只有一笔 0.01 元时，从 1 起步会算出 step=1、gridTop=1，
+     网格线只画得出顶部一根，柱子在图上几乎看不见（高 2.5px 的矮桩）。
+     加上小数步长，这种月也能正常出图。 */
+  const steps = [
+    0.01, 0.02, 0.05, 0.1, 0.2, 0.5,
+    1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000,
+    10000, 20000, 50000, 100000, 200000, 500000,
+  ];
+  if (!Number.isFinite(maxV) || maxV <= 0) return 1;   // 0 / 负数 / NaN / Infinity 都兜到这里
+  for (const st of steps) if (maxV / st <= 3) return st;
+  /* 兜底按数量级递推，而不是写死 —— 巨额数据下刻度也不会只剩一两根 */
+  let st = 1000000;
+  while (maxV / st > 3) st *= 2;
+  return st;
+}
+/* 下面这些一概按北京时间判定归属 —— 别用 getFullYear/getMonth/getDate，
+   那几个取的是「设备本地」的字段。出差在外或系统时区设错时，
+   同一笔记录可能被划到相邻的月份/日期，首页汇总和统计就会对不上账。 */
+function recDate(r) { return new Date(r.occurred_at); }
+function inMonth(d, y, m) {
+  const p = bjParts(d);
+  return !!p && p.y === y && p.m === m;
+}
+/* 当前「实际存在」的记录集：把本地隐藏掉的（先建后删失败的旧记录）滤掉。
+   列表渲染和所有统计都必须从这里取数 —— 有一处直接读 records 就会
+   和别处对不上。之前 render() 用 live、monthRecords() 自己再滤一遍，
+   两套并行逻辑，现在统一到这一个函数。 */
+function liveRecords() {
+  return droppedIds.size ? records.filter(r => !droppedIds.has(r.id)) : records;
+}
+function monthRecords(y, m) {
+  /* 只负责「按月份筛」，滤 droppedIds 的事交给 liveRecords ——
+     职责分开，免得同一个过滤条件在两处各写一遍 */
+  return liveRecords().filter(r => inMonth(recDate(r), y, m));
+}
+function monthKeyOf(y, m) { return y + '-' + pad(m + 1); }
+function hm(v) {
+  const p = bjParts(v);
+  return p ? pad(p.h) + ':' + pad(p.mi) : '';
+}
+function dayLabel(d) {
+  const p = bjParts(d);
+  if (!p) return '';
+  const np = bjParts(Date.now());
+  const md = (p.m + 1) + '月' + p.d + '日';
+  const wd = '周' + WD[new Date(Date.UTC(p.y, p.m, p.d)).getUTCDay()];
+  const base = (p.y === np.y) ? md : p.y + '年' + md;
+  const key = p.y + '-' + p.m + '-' + p.d;
+  if (key === np.y + '-' + np.m + '-' + np.d) return '<span class="d">今天</span> · ' + base + ' ' + wd;
+  const yb = bjParts(Date.now() - 86400000);
+  if (key === yb.y + '-' + yb.m + '-' + yb.d) return '<span class="d">昨天</span> · ' + base + ' ' + wd;
+  return base + ' ' + wd;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+/* ================= 分类图标 ================= */
+const svg = (inner) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+
+const ICONS = {
+  food:    { c: '#FF9500', s: svg('<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>') },
+  transit: { c: '#007AFF', s: svg('<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>') },
+  shop:    { c: '#FF2D55', s: svg('<path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>') },
+  home:    { c: '#30B0C7', s: svg('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') },
+  travel:  { c: '#32ADE6', s: svg('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>') },
+  comm:    { c: '#5856D6', s: svg('<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>') },
+  fun:     { c: '#AF52DE', s: svg('<rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/>') },
+  health:  { c: '#FF3B30', s: svg('<path stroke-width="2.6" d="M12 5.5v13"/><path stroke-width="2.6" d="M5.5 12h13"/>') },
+  edu:     { c: '#A2845E', s: svg('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') },
+  gift:    { c: '#FFCC00', s: svg('<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>') },
+  wear:    { c: '#FF375F', s: svg('<path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>') },
+  income:  { c: '#34C759', s: svg('<circle cx="12" cy="12" r="9.2"/><path d="M12 7.6v8.8"/><path d="m8.6 13 3.4 3.4 3.4-3.4"/>') },
+  other:   { c: '#8E8E93', s: svg('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.4"/>') },
+  empty:   { c: '#8E8E93', s: svg('<path d="M6 2h12v20l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5V2z"/><line x1="9.5" y1="7" x2="14.5" y2="7"/><line x1="9.5" y1="11" x2="14.5" y2="11"/>') },
+};
+
+/* ================= 分类图标 =================
+   图标表比分类表「宽」：travel / wear 没有独立分类，但记账时
+   「衣服」「回家机票」这类备注仍该显示对应图案，靠 note 二次匹配兜。
+   这样统计口径（10 类）和视觉辨识度两不误。 */
+
+const RULES = [
+  /* 顺序即优先级：先匹配到的赢。旅行排在娱乐/购物前，
+     免得「酒店」被更靠后的规则抢走图标。 */
+  { i: 'travel',  k: ['旅行', '旅游', '酒店', '民宿', '度假', '景区', '机票', '航班', '高铁', '风景'] },
+  { i: 'transit', k: ['交通', '打车', '地铁', '公交', '加油', '停车', '出行', '骑行', '单车', '滴滴', '高铁', '火车', '出租', '车费', '高速'] },
+  { i: 'food',    k: ['餐', '饭', '吃', '食', '外卖', '宵夜', '夜宵', '奶茶', '咖啡', '饮料', '茶', '水果', '零食', '菜', '食堂', '烧烤', '火锅', '小吃', '酒'] },
+  { i: 'shop',    k: ['购物', '超市', '便利', '电商', '淘宝', '京东', '拼多多', '百货', '日用', '商场', '快递', '下单'] },
+  { i: 'home',    k: ['居住', '住', '房租', '水电', '物业', '家用', '家居', '燃气', '房贷', '租房', '电费', '水费', '煤气'] },
+  { i: 'comm',    k: ['通讯', '话费', '流量', '月租', '宽带', '订阅', '云服务', '服务器', '网费'] },
+  { i: 'fun',     k: ['娱乐', '游戏', '电影', '视频', '演出', '会员', '音乐', '追剧', 'KTV', '酒吧', '剧本杀', '健身'] },
+  { i: 'health',  k: ['医疗', '药', '医院', '看病', '健康', '体检', '挂号', '诊所', '牙'] },
+  { i: 'edu',     k: ['教育', '学习', '书', '课', '培训', '学费', '文具', '考试', '网课'] },
+  { i: 'gift',    k: ['人情', '礼物', '红包', '份子', '孝敬', '礼金', '请客'] },
+  /* 服饰没有独立分类（后端只出 10 类），但图标保留，靠备注/分类文本命中 */
+  { i: 'wear',    k: ['服饰', '衣', '鞋', '美妆', '护肤', '化妆', '裤', '帽', '饰', '包'] },
+];
+
+/* 命中规则：分类文本优先，没中再用备注兜一次。
+   这样 AI 归到「购物」、备注写「优衣库T恤」的记录，也能显示服饰图标。 */
+function iconFor(r) {
+  if (r.type === 'income') return ICONS.income;
+  const cat = String(r.category || '').toLowerCase();
+  for (const rule of RULES) {
+    if (rule.k.some(k => cat.includes(k))) return ICONS[rule.i];
+  }
+  const note = String(r.note || '').toLowerCase();
+  if (note) {
+    for (const rule of RULES) {
+      if (rule.k.some(k => note.includes(k))) return ICONS[rule.i];
+    }
+  }
+  return ICONS.other;
+}
+
+/* ================= 接口 ================= */
+/* 请求超时：fetch 默认不超时，弱网或地址填错时会一直挂着，
+   界面上就是「转圈转到天荒地老」，用户只能干等。给个上限。
+   20 秒 —— 够慢网络跑完一次 AI 识别，又不至于让人怀疑卡死。 */
+const API_TIMEOUT = 20000;
+
+/* 超时拦截器（可整体替换）。默认就是 setTimeout —— 单独包一层是为了
+   让「超时」这条路径能被测试真正跑到：测试里把它换成 0.8 秒的版本，
+   就能在几秒内验证 abort 之后的提示，而不用干等 20 秒。 */
+const armTimeout = (fn, ms) => setTimeout(fn, ms);
+const disarmTimeout = (id) => clearTimeout(id);
+
+async function api(path, options = {}) {
+  if (!cfg || !cfg.api || !cfg.token) {
+    const err = new Error('还没配置 API 地址和 Token');
+    err.code = 'NO_CONFIG';
+    throw err;
+  }
+  /* 统一把 path 规整成以 / 开头，免得哪天传成 'api/records' 拼出怪地址 */
+  const url = cfg.api.replace(/\/+$/, '') + '/' + String(path).replace(/^\/+/, '');
+
+  const ctrl = new AbortController();
+  const timer = armTimeout(() => ctrl.abort(), API_TIMEOUT);
+
+  try {
+    const headers = Object.assign({ 'x-token': cfg.token }, options.headers || {});
+    const res = await fetch(url, Object.assign({}, options, { headers, signal: ctrl.signal }));
+    const data = await res.json().catch(() => ({ ok: false, error: '返回内容不是 JSON' }));
+    if (!res.ok || data.ok === false) {
+      const err = new Error(data.error || ('HTTP ' + res.status));
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  } catch (e) {
+    /* 超时被 abort 之后 fetch 抛的是 AbortError，翻成人看得懂的话。
+       这里不改错误内容本身 —— 后端是自家写的，错误信息是排障的第一手线索，
+       藏成「服务器不可用」只会让自己debug时更难受。 */
+    if (e && e.name === 'AbortError') {
+      const err = new Error('请求超时（' + (API_TIMEOUT / 1000) + ' 秒），请检查网络或 API 地址');
+      err.code = 'TIMEOUT';
+      throw err;
+    }
+    throw e;
+  } finally {
+    disarmTimeout(timer);
+  }
+}
+
+/* ================= 页面切换 ================= */
+function showMain() {
+  $('setup').hidden = true;
+  $('main').hidden = false;
+  $('nav').hidden = false;
+  $('fab').hidden = false;
+}
+
+function showSetup(msg, isErr) {
+  $('setup').hidden = false;
+  $('main').hidden = true;
+  $('nav').hidden = true;
+  $('fab').hidden = true;
+  const m = $('cfgMsg');
+  m.textContent = msg || '';
+  m.className = 'msg' + (isErr ? ' error' : '');
+  if (cfg) {
+    $('cfgApi').value = cfg.api || '';
+    $('cfgToken').value = cfg.token || '';
+    $('cfgBudget').value = cfg.budget ? cfg.budget : '';
+  }
+  /* 没连接过账本时导出没有意义（内存里没数据），藏起来 */
+  $('exportBtn').hidden = !cfg;
+  /* 每次进配置页都把 Token 打回码，省得上次点过「显示」就一直明文挂着 */
+  const tok = $('cfgToken');
+  if (tok) {
+    tok.type = 'password';
+    const eye = $('cfgTokenEye');
+    if (eye) { eye.textContent = '显示'; eye.setAttribute('aria-label', '显示 Token'); }
+  }
+  $('setupBack').hidden = !cfg;
+  window.scrollTo(0, 0);
+}
+
+/* ================= 渲染 ================= */
+function setLoading() {
+  $('total').textContent = '¥ --';
+  $('statIncome').textContent = '--';
+  $('statCount').textContent = '--';
+  $('recordCount').textContent = '';
+  $('list').innerHTML = '<div class="state"><div class="spinner"></div><div>正在加载…</div></div>';
+}
+
+function renderError(e) {
+  $('list').innerHTML =
+    '<div class="state">' +
+      '<div class="error-text">读取失败：' + esc(e.message) + '</div>' +
+      '<button class="retry" id="retryBtn">重试</button>' +
+    '</div>';
+  const rb = $('retryBtn');
+  if (rb) rb.onclick = () => load().catch(() => {});
+}
+
+function itemHtml(r) {
+  const isExp = r.type !== 'income';
+  const ic = iconFor(r);
+  const bits = [];
+  if (r.note) bits.push(esc(r.note));
+  if (r.account) bits.push(esc(r.account));
+  const title = esc(r.category || (isExp ? '支出' : '收入'));
+  return '<div class="item" data-id="' + esc(r.id) + '" role="button" tabindex="0">' +
+    '<div class="bubble" style="color:' + ic.c + ';background:' + ic.c + '1E">' + ic.s + '</div>' +
+    '<div class="body">' +
+      '<div class="t">' + title + '</div>' +
+      (bits.length ? '<div class="n">' + bits.join(' · ') + '</div>' : '') +
+    '</div>' +
+    '<div class="right">' +
+      '<div class="amt' + (isExp ? '' : ' in') + '">' + (isExp ? '−' : '+') + money(r.amount) + '</div>' +
+      '<div class="time">' + esc(hm(r.occurred_at)) + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function render() {
+  /* 一律按北京时间取「今天」，不用设备本地时间 —— 出差在外时
+     「本月」的口径不能跟着设备时区漂 */
+  const np = bjParts(Date.now());
+  const curY = np.y, curM = np.m;
+
+  /* 先滤掉「本地隐藏」的旧记录（先建后删失败的那条），
+     后面所有汇总、列表、统计都基于干净的数据，口径才一致。
+     统一走 liveRecords()，别在这儿再手写一遍 filter —— 统计侧（monthRecords）
+     也是从同一个函数取数，两处才会永远一致。 */
+  const live = liveRecords();
+
+  const mTitle = MN[curM] + '月';
+  $('largeTitle').textContent = mTitle;
+  $('navTitle').textContent = mTitle + '账本';
+  document.title = mTitle + '账本';
+
+  /* 本月汇总（按北京时间归属月份）。金额先转成「分」再累加 ——
+     直接累加浮点会在几十上百笔后攒出 0.0000000001 这类尾差，
+     显示时再除回来，账面上永远是干净的分。
+
+     笔数口径：当月**所有**记录都算一笔，金额为 null 的也算。
+     金额为 null 的那条（AI 没认出来、等用户去补）确实进不了金额汇总，
+     但它是一条实实在在存在的记录，列表里画着、用户数得出来。
+     要是这里只算「有金额的」，就会出现「共 10 条」但「9 笔」——
+     两个数字对不上，看着像丢了一条。 */
+  let expenseC = 0, incomeC = 0, monthCount = 0;
+  live.forEach(r => {
+    if (!inMonth(recDate(r), curY, curM)) return;
+    monthCount++;
+    /* 但金额该跳过的还是要跳过：Number(null)=0 会把它静默算成 0 元，
+       比不算更糟 —— 那是个看起来正常的错数字。 */
+    const c = toCents(r.amount);
+    if (c === null) return;
+    if (r.type === 'expense') expenseC += c;
+    else incomeC += c;
+  });
+
+  $('total').textContent = money(fromCents(expenseC));
+  $('statIncome').textContent = money(fromCents(incomeC));
+  $('statCount').textContent = monthCount + ' 笔';
+
+  /* ---------- 环比提示：本月支出 vs 上月 ----------
+     数据现成（liveRecords 全量在内存），一次遍历的事。
+     只在「上个月有支出」时才说话 —— 没有基数就谈不上多和少。 */
+  const pmY = curM === 0 ? curY - 1 : curY;
+  const pmM = curM === 0 ? 11 : curM - 1;
+  let prevExpC = 0;
+  live.forEach(r => {
+    if (r.type === 'income') return;
+    if (!inMonth(recDate(r), pmY, pmM)) return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    prevExpC += c;
+  });
+  const trendEl = $('statTrend');
+  if (prevExpC > 0 && expenseC > 0) {
+    const pct = (expenseC - prevExpC) / prevExpC * 100;
+    const up = pct >= 0;
+    trendEl.innerHTML = '比上月' + (up ? '多花 <b class="up">' : '少花 <b class="down">') + fmtPct(Math.abs(pct)) + '</b><span class="trend-sub">（上月 ' + money(fromCents(prevExpC)) + '）</span>';
+    trendEl.hidden = false;
+  } else if (prevExpC > 0 && expenseC === 0 && monthCount > 0) {
+    trendEl.textContent = '本月还没有支出 · 上月花了 ' + money(fromCents(prevExpC));
+    trendEl.hidden = false;
+  } else {
+    trendEl.hidden = true;
+  }
+
+  /* ---------- 预算进度条 ----------
+     预算是本地偏好（存 localStorage），不是数据，所以不进后端。
+     没设预算就整块隐藏，不给一个空壳子占地方。 */
+  const budgetBox = $('budgetBox');
+  const budget = cfg && cfg.budget;
+  if (budget > 0) {
+    const used = fromCents(expenseC);
+    const pct = used / budget * 100;
+    const fill = $('budgetFill');
+    fill.style.width = Math.min(100, pct) + '%';
+    fill.className = 'budget-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
+    $('budgetText').innerHTML =
+      '已用 <b>' + (pct >= 100 ? Math.round(pct) : fmtPct(pct)) + '</b> · 还能花 <b>' + money(Math.max(0, budget - used)) + '</b>';
+    budgetBox.hidden = false;
+  } else {
+    budgetBox.hidden = true;
+  }
+
+  /* ---------- 记录条数：有筛选时显示「匹配 N / 共 M 条」 ---------- */
+  const filtering = filterText.trim() !== '' || filterCat !== null;
+  const shownAll = filtering ? applyFilter(live) : live;
+  $('recordCount').textContent = filtering
+    ? '匹配 ' + shownAll.length + ' / 共 ' + live.length + ' 条'
+    : '共 ' + live.length + ' 条';
+
+  if (!live.length) {
+    $('list').innerHTML =
+      '<div class="state">' +
+        '<div class="bubble-big">' + ICONS.empty.s + '</div>' +
+        '<div>还没有记录</div>' +
+        '<div class="state-sub">点下方「记一笔」，或用快捷指令记第一笔</div>' +
+      '</div>';
+    return;
+  }
+
+  /* 搜索/筛选一个都没命中：给个明确的空态，别让人以为页面坏了 */
+  if (filtering && !shownAll.length) {
+    $('list').innerHTML =
+      '<div class="state">' +
+        '<div class="bubble-big">' + ICONS.empty.s + '</div>' +
+        '<div>没有匹配的记录</div>' +
+        '<div class="state-sub">换个关键词，或点搜索框右侧「清除」</div>' +
+      '</div>';
+    return;
+  }
+
+  /* 按天分组（列表只展示最近 60 条，更早的看统计）。
+     搜索/筛选时放宽到 200 条 —— 找东西的时候少翻一次页。
+     用 Map 归组，而不是「看跟前一条是不是同一天」——
+     后者只在数据严格按天排序时才成立，一旦顺序有变
+     （服务端改了排序、或者中间插了一条），同一天会被拆成好几段。 */
+  const MAX_LIST = filtering ? 200 : 60;
+  const shown = shownAll.slice(0, MAX_LIST);
+  const groupMap = new Map();
+  shown.forEach(r => {
+    const d = recDate(r);
+    const p = bjParts(d);
+    const key = p ? (p.y + '-' + pad(p.m + 1) + '-' + pad(p.d)) : 'unknown';
+    if (!groupMap.has(key)) groupMap.set(key, { key: key, valid: !!p, d: d, items: [] });
+    groupMap.get(key).items.push(r);
+  });
+  const groups = [...groupMap.values()];
+
+  $('list').innerHTML = groups.map(g => {
+    let spent = 0, earned = 0;
+    g.items.forEach(r => {
+      const c = toCents(r.amount);
+      if (c === null) return;
+      if (r.type !== 'income') spent += c;
+      else earned += c;
+    });
+    const sum = spent > 0 ? '支出 ' + money(fromCents(spent)) : (earned > 0 ? '收入 ' + money(fromCents(earned)) : '');
+    return '<div class="group-head"><span>' + (g.valid ? dayLabel(g.d) : '记录') + '</span>' +
+      (sum ? '<span class="sum">' + sum + '</span>' : '') + '</div>' +
+      '<div class="card">' + g.items.map(itemHtml).join('') + '</div>';
+  }).join('') + (shownAll.length > MAX_LIST
+    /* 判据跟着筛选结果走：没筛选时 = 原来的 live.length（仍要排除 droppedIds）；
+       筛选时 = 匹配数超出展示上限才提示 */
+    ? '<div class="more-note">' + (filtering
+        ? '匹配结果太多，仅显示前 ' + MAX_LIST + ' 条'
+        : '仅显示最近 ' + MAX_LIST + ' 条，更早记录见「统计」') + '</div>'
+    : '');
+
+  if (statYm) renderStats();
+}
+
+/* ================= 数据加载 ================= */
+/* 把服务端数据洗干净再进内存 —— 后端是自家写的，但「自家写的」不等于
+   「永远不会出错」。一条脏数据能让整个页面崩掉，不值当。 */
+function isFiniteNum(v) {
+  return typeof v === 'number' ? Number.isFinite(v) : Number.isFinite(Number(v));
+}
+/* 一条记录至少要能认出来：有 id、有合法 type。
+   **不看金额** —— 金额为 null（AI 没认出来）的记录要留下，
+   那是给人补的，不是垃圾。按调用方各自的语义决定怎么处理 null 金额：
+   render 里跳过金额累加但照算笔数，统计侧同理。
+   代价是 null 混进统计会被 Number(null)=0 静默算成 0 元，
+   所以所有金额累加处都必须先过 toCents 判 null。 */
+function validRecord(r) {
+  if (!r || typeof r !== 'object') return false;
+  if (r.id === null || r.id === undefined || r.id === '') return false;
+  if (r.type !== 'expense' && r.type !== 'income') return false;
+  return true;
+}
+function safeArray(v) { return Array.isArray(v) ? v : []; }
+
+/* ================= 本地增删改（不重拉全量） =================
+   服务端排序是 occurred_at DESC, id DESC。本地改完数据必须维持同样的顺序，
+   否则「刚记的一笔」和「下次刷新后」位置会不一样，看着像自己跳了。
+   注意 id 可能一边是数字一边是字符串（服务端 JSON 给数字，本地可能拿的是
+   输入框字符串），比较时统一转字符串比，别用 < 直接比数字。 */
+function cmpRecords(a, b) {
+  const ta = String(a.occurred_at || '');
+  const tb = String(b.occurred_at || '');
+  if (ta !== tb) return ta < tb ? 1 : -1;          // 时间倒序
+  const ia = String(a.id), ib = String(b.id);
+  if (ia === ib) return 0;
+  return ia < ib ? 1 : -1;                          // 同秒按 id 倒序
+}
+function sortRecords() { records.sort(cmpRecords); }
+
+/* 新增：本地插一条，不重拉全量。
+   插完必须重排 —— 不能直接 unshift。列表是按时间倒序的，补记一笔上个月的账
+   时 unshift 会把它顶到 9 月记录上面，位置是错的。
+   返回插入的记录（拿不到 id 就返回 null，调用方据此决定要不要回退重拉）。 */
+function insertLocal(rec) {
+  if (!rec || rec.id === null || rec.id === undefined || rec.id === '') return null;
+  if (!validRecord(rec)) return null;
+  records.push(rec);
+  sortRecords();
+  return rec;
+}
+
+/* 编辑：原地替换。id 不变，所以只换字段，位置可能因为改了时间而变，重排一下。
+   找不到就返回 false —— 说明本地没有这条（可能别的设备删了），
+   调用方应该回退到重拉，而不是把改动凭空塞进列表。 */
+function replaceLocal(id, patch) {
+  const i = records.findIndex(r => String(r.id) === String(id));
+  if (i < 0) return false;
+  records[i] = Object.assign({}, records[i], patch);
+  sortRecords();
+  return true;
+}
+
+/* 翻页拉全量。原来一次要 1000 条，超了就只能「诚实地算不准」；
+   现在按 500 一页翻，直到服务端说没有下一页。
+   设个页数上限兜底：真出 bug（比如 has_more 永远是 true）也不会转到死。 */
+const PAGE_SIZE = 500;
+const MAX_PAGES = 40; // 20000 条，够用很久了
+
+async function fetchRecords() {
+  /* 每次加载都要清零 —— 上一次是截断的，不代表这一次也是。
+     忘了清零的话，某次截断之后警示条会一直挂着，再也消不掉。 */
+  dataTruncated = false;
+
+  /* 后端是本项目自带的，不存在「老版本不认 limit」的情况，所以不做参数降级。
+     原来这里是无条件 catch 后换 limit=100 重试 —— 那是坏的：如果第一个请求
+     是因为超时（20 秒）或 token 错而失败，第二个请求会原样再失败一次，
+     用户白等最长 40 秒，最后看到的还是同一个错。
+     「让错误更快地暴露出来」比「多试一次碰运气」重要。 */
+  const first = await api('/api/records?limit=' + PAGE_SIZE);
+
+  const all = safeArray(first && first.data).filter(validRecord);
+
+  /* has_more 是权威判据 —— 服务端直接告诉你「还有没有下一批」。
+     不要拿 truncated 当翻页依据：它的语义是「这一页装满了」，
+     恰好 500 条时它也是 true，会让人多翻一次空页。
+     只有服务端没给 has_more 时才退回到按「这页满没满」猜。 */
+  let more = typeof first.has_more === 'boolean'
+    ? first.has_more
+    : all.length >= PAGE_SIZE;
+
+  let page = 1;
+  while (more && page < MAX_PAGES) {
+    const res = await api('/api/records?limit=' + PAGE_SIZE + '&offset=' + all.length);
+    const batch = safeArray(res && res.data).filter(validRecord);
+    if (!batch.length) break;               // 服务端说还有、但给不出东西，别死转
+    all.push(...batch);
+    more = typeof res.has_more === 'boolean' ? res.has_more : batch.length >= PAGE_SIZE;
+    page++;
+  }
+
+  /* 撞上页数上限说明还没拉完，这时候必须让警示条亮起来。
+     判据用 more 而不是 truncated —— truncated 只看单页装没装满，
+     翻完最后一页时它仍然是 true（最后一页也是满的），会误报警示条。 */
+  if (more && page >= MAX_PAGES) dataTruncated = true;
+
+  return Object.assign({}, first, { data: all, truncated: dataTruncated });
+}
+
+/* 同一时刻只允许一次加载在跑。连点重试、快速切页签都会触发 load()，
+   并发时谁先回来不确定，先回来的可能反而是旧数据 —— 后写的覆盖先写的
+   就把新数据盖掉了。这里用「自增序号 + 只认最后一次」来防。 */
+let loadSeq = 0;
+
+/* silent：原地换数据，不切骨架屏。
+   删一条记录后要重拉，但这时候屏幕上本来就有内容 —— 把它整个换成
+   「正在加载…」会闪一下，正是「点了删除卡住几秒」的观感来源之一。
+   有旧内容就先留着，新数据回来再原地替换。 */
+async function load(opts) {
+  const silent = !!(opts && opts.silent);
+  const seq = ++loadSeq;
+  if (!silent) setLoading();
+  $('refresh').classList.add('spin');
+  try {
+    const res = await fetchRecords();
+    /* 在 await 期间又有新的 load() 发起了 → 我这份已经过期，直接丢掉 */
+    if (seq !== loadSeq) return;
+    records = safeArray(res.data).filter(validRecord);
+    /* 拿到服务端真实数据了，之前的本地隐藏标记就作废 */
+    droppedIds.clear();
+    render();
+  } catch (e) {
+    /* 过期的请求连报错都不该显示 —— 它代表的是已经被取代的那一次加载 */
+    if (seq === loadSeq) renderError(e);
+    throw e;
+  } finally {
+    $('refresh').classList.remove('spin');
+  }
+}
+
+/* ================= 统计视图 ================= */
+function setView(v) {
+  view = v;
+  [...$('viewSeg').children].forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $('viewList').hidden = v !== 'list';
+  $('viewStats').hidden = v !== 'stats';
+  if (v === 'stats') {
+    if (!statYm) { const p = bjParts(Date.now()); statYm = { y: p.y, m: p.m }; }
+    renderStats();
+  }
+}
+
+function shiftMonth(delta) {
+  let y = statYm.y, m = statYm.m + delta;
+  if (m < 0) { m = 11; y--; }
+  if (m > 11) { m = 0; y++; }
+  statYm = { y: y, m: m };
+  selCat = null; selIncCat = null; selDay = null; selMon = null;
+  renderStats();
+}
+
+function updateMonthNav() {
+  /* 「本月」按北京时间算，不跟设备时区走 */
+  const p = bjParts(Date.now());
+  const isCur = statYm.y === p.y && statYm.m === p.m;
+
+  /* 下个月：只在「当前月」禁用 —— 不让翻到未来。
+     上个月：账本有数据就永远可点，自由浏览（翻过头了看到的是空月份提示）；
+     账本没数据也放开，但最多往前翻 12 个月 —— 空账本翻到 2019 年
+     还翻不到头，反而像坏了，所以给个一年到头。 */
+  $('mNext').disabled = isCur;
+  if (records.length > 0) {
+    $('mPrev').disabled = false;
+  } else {
+    const floorTotal = p.y * 12 + p.m - 11; // 当前月往前数 11 个月
+    $('mPrev').disabled = (statYm.y * 12 + statYm.m) <= floorTotal;
+  }
+
+  $('mLabel').textContent = statYm.y + '年' + (statYm.m + 1) + '月';
+
+  /* 翻离本月后给一个「回到本月」的入口，翻远了能一键回来 */
+  const back = $('mBack');
+  if (back) back.hidden = isCur;
+}
+
+function renderStats() {
+  const y = statYm.y, m = statYm.m;
+  const mr = monthRecords(y, m);
+
+  /* 数据被截断时先把话说清楚，否则下面的数字看着正常、其实少算了 */
+  const warn = $('truncWarn');
+  if (dataTruncated) {
+    warn.hidden = false;
+    $('truncWarnText').textContent =
+      '已加载 ' + records.length + ' 条，达到接口上限，统计可能不完整。建议改用服务端统计接口。';
+  } else {
+    warn.hidden = true;
+  }
+
+  /* 这个月一条记录都没有：摘要卡照常显示 0，图表区换成一句明确的话。
+     不给图表的话用户只会看到空白，会以为页面坏了或箭头没生效。 */
+  const emptyEl = $('monthEmpty');
+  if (!mr.length) {
+    emptyEl.hidden = false;
+    emptyEl.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>' +
+        '<line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' +
+      '</svg>' +
+      (y + '年' + (m + 1) + '月没有记录');
+  } else {
+    emptyEl.hidden = true;
+  }
+
+  /* 图表区随月份有无数据一起显隐 */
+  ['donutCard', 'incCard', 'insightCard', 'dailyCard', 'monthlyCard'].forEach(function (id) {
+    const el = $(id);
+    if (el) el.hidden = !mr.length;
+  });
+
+  /* 摘要卡。金额都先用「分」累加再除回来，避免浮点尾差 */
+  let expC = 0, incC = 0;
+  mr.forEach(r => {
+    const c = toCents(r.amount);
+    if (c === null) return;   // 金额待补的记录不参与汇总，免得被当成 0 元
+    if (r.type === 'income') incC += c; else expC += c;
+  });
+  const exp = fromCents(expC), inc = fromCents(incC);
+  $('stExp').textContent = money(exp);
+  $('stInc').textContent = money(inc);
+  const bal = inc - exp;
+  const balEl = $('stBal');
+  balEl.textContent = (bal < 0 ? '−' : '+') + money(Math.abs(bal));
+  balEl.className = 'sc-val' + (bal > 0 ? ' pos' : bal < 0 ? ' neg' : '');
+
+  if (!mr.length) {
+    /* 没数据就不用画图了，跳过后面全部渲染 —— 但仍要更新月份导航 */
+    updateMonthNav();
+    return;
+  }
+
+  /* 分类占比（支出）。收入不参与 —— 混进来的话占比会被收入额撑歪 */
+  const catMap = new Map();
+  mr.forEach(r => {
+    if (r.type === 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    const k = r.category || '未分类';
+    catMap.set(k, (catMap.get(k) || 0) + c);
+  });
+  let cats = [...catMap.entries()]
+    .map(x => ({ name: x[0], amount: fromCents(x[1]) }))
+    .sort((a, b) => b.amount - a.amount);
+  if (cats.length > 8) {
+    const rest = cats.slice(7).reduce((s, c) => s + c.amount, 0);
+    cats = cats.slice(0, 7).concat([{ name: '其他', amount: rest, merged: true }]);
+  }
+  renderDonut(cats, exp);
+  renderInsights(mr, y, m);
+
+  /* ---------- 收入构成：口径同支出饼图（Top7 + 其他合并） ---------- */
+  const incMap = new Map();
+  mr.forEach(r => {
+    if (r.type !== 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    const k = r.category || '未分类';
+    incMap.set(k, (incMap.get(k) || 0) + c);
+  });
+  let incCats = [...incMap.entries()]
+    .map(x => ({ name: x[0], amount: fromCents(x[1]) }))
+    .sort((a, b) => b.amount - a.amount);
+  if (incCats.length > 8) {
+    const rest = incCats.slice(7).reduce((s, c) => s + c.amount, 0);
+    incCats = incCats.slice(0, 7).concat([{ name: '其他', amount: rest, merged: true }]);
+  }
+  const incCard = $('incCard');
+  if (inc > 0) {
+    incCard.hidden = false;
+    renderIncomeDonut(incCats, inc);
+  } else {
+    /* 这个月没收入就不摆一张空饼图 —— 占位话术支出侧已经有了 */
+    incCard.hidden = true;
+  }
+
+  renderDaily(mr, y, m);
+  renderMonthly();
+  updateMonthNav();
+}
+
+/* 通用环形图绘制。支出占比和收入构成共用一套弧线/图例/选中逻辑，
+   两处各包一层只差配色和中心文案 —— 改样式只改这里，两边同时生效。 */
+function renderDonutGeneric(o) {
+  const box = o.box;
+  const svgEl = box.querySelector('svg');
+  const center = o.center;
+  const emptyEl = box.querySelector('.chart-empty');
+
+  if (!o.cats.length) {
+    svgEl.style.display = 'none';
+    center.style.display = 'none';
+    if (!emptyEl) box.insertAdjacentHTML('beforeend', '<div class="chart-empty">' + o.emptyText + '</div>');
+    o.legend.innerHTML = '';
+    return;
+  }
+  svgEl.style.display = '';
+  center.style.display = '';
+  if (emptyEl) emptyEl.remove();
+
+  const total = o.cats.reduce((s, c) => s + c.amount, 0) || 1;
+  o.cats.forEach(c => { c.pct = c.amount / total * 100; });
+
+  let cum = 0, arcs = '';
+  o.cats.forEach(c => {
+    arcs += '<circle cx="100" cy="100" r="78" fill="none" stroke="' + c.color + '" stroke-width="24" pathLength="100" stroke-dasharray="' + c.pct + ' ' + Math.max(0, 100 - c.pct) + '" stroke-dashoffset="' + (-cum) + '" data-cat="' + esc(c.name) + '"' + (o.sel === c.name ? ' class="sel"' : '') + '/>';
+    cum += c.pct;
+  });
+  svgEl.innerHTML = '<g transform="rotate(-90 100 100)">' + arcs + '</g>';
+  box.classList.toggle('dim', !!o.sel);
+  const selObj = o.cats.find(c => c.name === o.sel) || null;
+  center.innerHTML = selObj
+    ? '<div class="dc-val">' + money(selObj.amount) + '</div><div class="dc-lab">' + esc(selObj.name) + ' · ' + fmtPct(selObj.pct) + '</div>'
+    : o.centerAll;
+
+  o.legend.innerHTML = o.cats.map(c => {
+    const ic = o.legendIcon(c);
+    return '<div class="dl-row' + (o.sel === c.name ? ' sel' : '') + '" data-cat="' + esc(c.name) + '">' +
+      '<div class="dl-ic" style="color:' + ic.c + ';background:' + ic.c + '1E">' + ic.s + '</div>' +
+      '<div class="dl-name">' + esc(c.name) + '</div>' +
+      '<div class="dl-amt"><div class="a">' + money(c.amount) + '</div><div class="p">' + fmtPct(c.pct) + '</div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderDonut(cats, exp) {
+  cats.forEach(c => {
+    c.color = c.merged ? '#8E8E93' : iconFor({ type: 'expense', category: c.name }).c;
+  });
+  if (selCat && !cats.some(c => c.name === selCat)) selCat = null;
+  renderDonutGeneric({
+    box: $('donutBox'), legend: $('donutLegend'), center: $('donutCenter'),
+    cats: cats, sel: selCat, emptyText: '本月还没有支出记录',
+    centerAll: '<div class="dc-val">' + money(exp) + '</div><div class="dc-lab">本月支出</div>',
+    legendIcon: (c) => c.merged ? { c: c.color, s: ICONS.other.s } : iconFor({ type: 'expense', category: c.name }),
+  });
+}
+
+function renderIncomeDonut(cats, inc) {
+  cats.forEach(c => {
+    c.color = c.merged ? '#8E8E93' : (INC_COLORS[c.name] || '#34C759');
+  });
+  if (selIncCat && !cats.some(c => c.name === selIncCat)) selIncCat = null;
+  renderDonutGeneric({
+    box: $('incBox'), legend: $('incLegend'), center: $('incCenter'),
+    cats: cats, sel: selIncCat, emptyText: '本月没有收入记录',
+    centerAll: '<div class="dc-val">' + money(inc) + '</div><div class="dc-lab">本月收入</div>',
+    legendIcon: (c) => ({ c: c.merged ? '#8E8E93' : '#34C759', s: ICONS.income.s }),
+  });
+}
+
+/* ================= 本月看点 =================
+   把「这月花得怎么样」浓缩成最多两句话：
+   1. 最大单笔支出 —— 一个月里最值得回头看的一笔；
+   2. 分类环比异常 —— 和前三个月同类平均比，偏差 ≥40% 且金额够分量才说话。
+   没有可说的就整卡隐藏，绝不硬凑。 */
+function renderInsights(mr, y, m) {
+  const card = $('insightCard'), list = $('insightList');
+  const rows = [];
+
+  /* 1. 最大单笔支出 */
+  let maxR = null, maxC = 0;
+  mr.forEach(r => {
+    if (r.type === 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    if (c > maxC) { maxC = c; maxR = r; }
+  });
+  if (maxR) {
+    const p = bjParts(maxR.occurred_at);
+    const bits = [maxR.category || '未分类'];
+    if (maxR.note) bits.push(maxR.note);
+    rows.push(
+      '最大单笔支出 <span class="hl">' + money(fromCents(maxC)) + '</span>' +
+      '（' + esc(bits.join(' · ')) + (p ? '，' + (p.m + 1) + '月' + p.d + '日' : '') + '）'
+    );
+  }
+
+  /* 2. 分类环比异常。前三个月的记录只取一次，别每个分类都全表扫一遍 */
+  const curMap = new Map();
+  mr.forEach(r => {
+    if (r.type === 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    const k = r.category || '未分类';
+    curMap.set(k, (curMap.get(k) || 0) + c);
+  });
+  const prior = [];
+  for (let i = 1; i <= 3; i++) {
+    let yy = y, mm = m - i;
+    if (mm < 0) { mm += 12; yy--; }
+    prior.push(...monthRecords(yy, mm));
+  }
+  let best = null;
+  [...curMap.entries()].forEach(([name, curC]) => {
+    const cur = fromCents(curC);
+    if (cur < 20) return;                 // 太小的类不值得占用一行
+    let sumC = 0;
+    prior.forEach(r => {
+      if (r.type === 'income') return;
+      if ((r.category || '未分类') !== name) return;
+      const c = toCents(r.amount);
+      if (c === null) return;
+      sumC += c;
+    });
+    const avg = fromCents(sumC) / 3;
+    if (avg <= 0) return;                 // 前三个月没花过的类，缺基数不硬算
+    const dev = (cur - avg) / avg * 100;
+    if (Math.abs(dev) < 40) return;
+    if (!best || Math.abs(dev) > Math.abs(best.dev)) best = { name: name, dev: dev, cur: cur, avg: avg };
+  });
+  if (best) {
+    const up = best.dev >= 0;
+    rows.push(
+      '「' + esc(best.name) + '」比前三个月平均' +
+      (up ? '多花 <span class="hl bad">' : '少花 <span class="hl ok">') + fmtPct(Math.abs(best.dev)) + '</span>' +
+      '（本月 ' + money(best.cur) + '，月均 ' + money(best.avg) + '）'
+    );
+  }
+
+  if (rows.length && mr.length) {
+    card.hidden = false;
+    $('insightTitle').textContent = (m + 1) + '月看点';
+    list.innerHTML = rows.map(t =>
+      '<div class="insight-row"><span class="insight-dot"></span><div>' + t + '</div></div>'
+    ).join('');
+  } else {
+    card.hidden = true;
+  }
+}
+
+function renderDaily(mr, y, m) {
+  const box = $('dailyBox'), cap = $('dailyCap');
+  const D = new Date(y, m + 1, 0).getDate();
+  if (selDay && (selDay < 1 || selDay > D)) selDay = null;
+
+  const amt = new Array(D + 1).fill(0);
+  mr.forEach(r => {
+    if (r.type === 'income') return;
+    const c = toCents(r.amount);
+    if (c === null) return;
+    const p = bjParts(recDate(r));
+    if (!p) return;
+    const day = p.d;
+    if (day >= 1 && day <= D) amt[day] += c;
+  });
+  /* 后面画图时把「分」换算回元 */
+  for (let i = 1; i <= D; i++) amt[i] = fromCents(amt[i]);
+
+  if (!amt.some(v => v > 0)) {
+    box.innerHTML = '<div class="chart-empty">本月暂无支出</div>';
+    cap.textContent = '';
+    return;
+  }
+
+  const cp = bjParts(Date.now());
+  const today = (y === cp.y && m === cp.m) ? cp.d : 0;
+  const totalExp = amt.reduce((s, v) => s + v, 0);
+  const maxV = Math.max.apply(null, amt);
+  const maxDay = amt.indexOf(maxV);
+  const avg = totalExp / D;
+
+  const W = 344, H = 128, TOP = 12, L = 36, R = 8, B = 18;
+  const plotW = W - L - R, plotH = H - TOP - B;
+  const step = niceStep(maxV);
+  /* 用整数计数算读数，不要靠 gv += step 累加 —— step 现在可以是 0.01 这种
+     小数，累加会攒出 0.30000000000000004 的漂移。
+     ticks 是「几根线」，每根线的读数由 k * step 现算，从整数出发不累加。 */
+  const ticks = Math.max(1, Math.round(Math.ceil(maxV / step)));
+  /* ticks * step 在浮点下会出 0.30000000000000004 这种毛刺（0.1*3 的锅）。
+     它要当除数参与每个柱子的高度计算，留着会让所有柱子矮一丁点。
+     按步长的小数位数收敛回去 —— step 只可能来自上面那张固定表，
+     小数位最多 2 位，所以 round 到 2 位就够，不会误伤大数。 */
+  const gridTop = Number((ticks * step).toFixed(2));
+  const yOf = v => TOP + plotH - (v / gridTop) * plotH;
+  const slot = plotW / D;
+  const bw = Math.min(16, Math.max(5, slot * 0.58));
+
+  let s = '';
+  for (let k = 1; k <= ticks; k++) {
+    const gv = k * step;
+    const gy = yOf(gv);
+    s += '<line class="gl" x1="' + L + '" x2="' + (W - R) + '" y1="' + fx(gy) + '" y2="' + fx(gy) + '"/>' +
+         '<text class="ax" x="' + (L - 5) + '" y="' + fx(gy + 3) + '" text-anchor="end">' + fmtShort(gv) + '</text>';
+  }
+  for (let d = 1; d <= D; d++) {
+    const v = amt[d];
+    const x = L + (d - 1) * slot + (slot - bw) / 2;
+    if (v > 0) {
+      const h = Math.max(2.5, (v / gridTop) * plotH);
+      s += '<rect class="bar' + (d === selDay ? ' on' : d === today ? ' today' : '') + '" x="' + fx(x) + '" y="' + fx(TOP + plotH - h) + '" width="' + fx(bw) + '" height="' + fx(h) + '" rx="4"/>';
+    } else {
+      s += '<rect x="' + fx(x + bw / 2 - 0.75) + '" y="' + fx(TOP + plotH - 3) + '" width="1.5" height="3" fill="var(--label-3)" opacity="0.4"/>';
+    }
+    s += '<rect class="hit" data-day="' + d + '" x="' + fx(L + (d - 1) * slot) + '" y="' + TOP + '" width="' + fx(slot) + '" height="' + plotH + '" fill="transparent"/>';
+  }
+  const ay = yOf(avg);
+  s += '<line class="avg" x1="' + L + '" x2="' + (W - R) + '" y1="' + fx(ay) + '" y2="' + fx(ay) + '"/>';
+  [1, 5, 10, 15, 20, 25, 30].filter(d => d <= D).forEach(d => {
+    s += '<text class="ax" x="' + fx(L + (d - 1) * slot + slot / 2) + '" y="' + (H - 5) + '" text-anchor="middle">' + d + '</text>';
+  });
+
+  box.innerHTML = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="每日支出柱状图">' + s + '</svg>';
+  cap.textContent = selDay
+    ? (m + 1) + '月' + selDay + '日 · 支出 ' + money(amt[selDay] || 0) + ' · 再点一下取消'
+    : '日均 ' + money(avg) + ' · 最高 ' + money(maxV) + '（' + (m + 1) + '月' + maxDay + '日）';
+}
+
+function renderMonthly() {
+  const box = $('monthlyBox'), cap = $('monCap');
+  const months = [];
+  let y = statYm.y, m = statYm.m;
+  for (let i = 0; i < 6; i++) { months.unshift({ y: y, m: m }); m--; if (m < 0) { m = 11; y--; } }
+
+  const data = months.map(mm => {
+    let eC = 0, incC = 0;
+    monthRecords(mm.y, mm.m).forEach(r => {
+      const c = toCents(r.amount);
+      if (c === null) return;
+      if (r.type === 'income') incC += c; else eC += c;
+    });
+    return { y: mm.y, m: mm.m, e: fromCents(eC), i: fromCents(incC) };
+  });
+
+  if (!data.some(d => d.e > 0 || d.i > 0)) {
+    box.innerHTML = '<div class="chart-empty">暂无数据</div>';
+    cap.textContent = '';
+    return;
+  }
+  if (selMon && !data.some(d => monthKeyOf(d.y, d.m) === selMon)) selMon = null;
+
+  const maxV = Math.max.apply(null, data.map(d => Math.max(d.e, d.i)).concat([1]));
+  const W = 344, H = 128, TOP = 12, L = 36, R = 8, B = 18;
+  const plotW = W - L - R, plotH = H - TOP - B;
+  const step = niceStep(maxV);
+  /* 和日柱状图同一套：整数计数算网格线，gridTop 收敛浮点毛刺。
+     两处图表都有一份刻度逻辑，改的时候必须一起改 ——
+     只改一处的话，小金额下一个月能画好、另一个月画不出来。 */
+  const ticks = Math.max(1, Math.round(Math.ceil(maxV / step)));
+  const gridTop = Number((ticks * step).toFixed(2));
+  const yOf = v => TOP + plotH - (v / gridTop) * plotH;
+  const groupW = plotW / 6;
+  const bw = Math.min(13, groupW * 0.3);
+
+  let s = '';
+  for (let k = 1; k <= ticks; k++) {
+    const gv = k * step;
+    const gy = yOf(gv);
+    s += '<line class="gl" x1="' + L + '" x2="' + (W - R) + '" y1="' + fx(gy) + '" y2="' + fx(gy) + '"/>' +
+         '<text class="ax" x="' + (L - 5) + '" y="' + fx(gy + 3) + '" text-anchor="end">' + fmtShort(gv) + '</text>';
+  }
+  data.forEach((d, idx) => {
+    const key = monthKeyOf(d.y, d.m);
+    const sel = selMon === key;
+    const cx = L + idx * groupW + groupW / 2;
+    if (d.e > 0) {
+      const top = yOf(d.e);
+      s += '<rect class="bar' + (sel ? ' on' : '') + '" x="' + fx(cx - 3 - bw) + '" y="' + fx(top) + '" width="' + fx(bw) + '" height="' + fx(TOP + plotH - top) + '" rx="4"/>';
+    }
+    if (d.i > 0) {
+      const top = yOf(d.i);
+      s += '<rect class="bar in' + (sel ? ' on' : '') + '" x="' + fx(cx + 3) + '" y="' + fx(top) + '" width="' + fx(bw) + '" height="' + fx(TOP + plotH - top) + '" rx="4"/>';
+    }
+    s += '<text class="ax" x="' + fx(cx) + '" y="' + (H - 5) + '" text-anchor="middle">' + (d.m + 1) + '月</text>' +
+         '<rect class="hit" data-mon="' + key + '" x="' + fx(L + idx * groupW) + '" y="' + TOP + '" width="' + fx(groupW) + '" height="' + plotH + '" fill="transparent"/>';
+  });
+
+  box.innerHTML = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="近 6 个月收支对比">' + s + '</svg>';
+  const sd = data.find(d => monthKeyOf(d.y, d.m) === (selMon || monthKeyOf(statYm.y, statYm.m))) || data[5];
+  cap.textContent = sd.y + '年' + (sd.m + 1) + '月 · 支出 ' + money(sd.e) + ' · 收入 ' + money(sd.i) + (selMon ? ' · 再点一下取消' : '');
+}
+
+/* ---------- 统计视图事件 ---------- */
+$('viewSeg').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (b) setView(b.dataset.view);
+};
+$('mPrev').onclick = () => shiftMonth(-1);
+$('mNext').onclick = () => shiftMonth(1);
+$('mBack').onclick = () => {
+  const p = bjParts(Date.now());
+  statYm = { y: p.y, m: p.m };
+  selCat = null; selIncCat = null; selDay = null; selMon = null;
+  renderStats();
+};
+
+function toggleCat(name) { selCat = selCat === name ? null : name; renderStats(); }
+$('donutBox').onclick = (e) => {
+  const c = e.target.closest('circle[data-cat]');
+  if (c) toggleCat(c.dataset.cat);
+};
+$('donutLegend').onclick = (e) => {
+  const r = e.target.closest('.dl-row');
+  if (r) toggleCat(r.dataset.cat);
+};
+
+/* 收入构成图的选中 —— 和支出饼图各选各的，互不干扰 */
+function toggleIncCat(name) { selIncCat = selIncCat === name ? null : name; renderStats(); }
+$('incBox').onclick = (e) => {
+  const c = e.target.closest('circle[data-cat]');
+  if (c) toggleIncCat(c.dataset.cat);
+};
+$('incLegend').onclick = (e) => {
+  const r = e.target.closest('.dl-row');
+  if (r) toggleIncCat(r.dataset.cat);
+};
+$('dailyBox').onclick = (e) => {
+  const h = e.target.closest('.hit');
+  if (!h) return;
+  const d = Number(h.dataset.day);
+  selDay = selDay === d ? null : d;
+  renderStats();
+};
+$('monthlyBox').onclick = (e) => {
+  const h = e.target.closest('.hit');
+  if (!h) return;
+  const k = h.dataset.mon;
+  selMon = selMon === k ? null : k;
+  renderStats();
+};
+
+/* ================= 明细页搜索 / 筛选 =================
+   数据本来就全量在内存里（liveRecords），过滤纯前端完成，不碰后端。
+   首页汇总（本月支出等）永远算全量 —— 筛选只决定「列表里显示什么」，
+   两边口径分开，才不会出现「筛完数字也变了」的困惑。 */
+function applyFilter(list) {
+  let out = list;
+  const q = filterText.trim().toLowerCase();
+  if (q) {
+    out = out.filter(r => {
+      const hay = [
+        r.note, r.category, r.account,
+        r.type === 'income' ? '收入' : '支出',
+        (r.amount === null || r.amount === undefined) ? '' : String(r.amount),
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  if (filterCat) {
+    if (filterCat === '收入') out = out.filter(r => r.type === 'income');
+    else if (filterCat === '未分类') out = out.filter(r => r.type !== 'income' && !r.category);
+    else out = out.filter(r => r.type !== 'income' && r.category === filterCat);
+  }
+  return out;
+}
+
+/* 筛选芯片：预设分类 + 收入 + 未分类。和统计页同一个 10 类口径 */
+const FILTER_CATS = CAT_EXPENSE.map(c => c.v).concat(['收入', '未分类']);
+
+function buildFilterChips() {
+  $('filterChips').innerHTML = ['全部'].concat(FILTER_CATS).map(v =>
+    '<button type="button" class="f-chip" data-val="' + esc(v) + '">' + esc(v) + '</button>'
+  ).join('');
+  syncFilterChips();
+}
+function syncFilterChips() {
+  [...$('filterChips').children].forEach(b => {
+    const on = b.dataset.val === '全部' ? !filterCat : b.dataset.val === filterCat;
+    b.classList.toggle('on', on);
+  });
+}
+
+$('searchInput').addEventListener('input', (e) => {
+  filterText = e.target.value;
+  $('searchClear').hidden = !filterText.trim();
+  render();
+});
+$('searchClear').onclick = () => {
+  filterText = '';
+  $('searchInput').value = '';
+  $('searchClear').hidden = true;
+  render();
+  $('searchInput').focus();
+};
+$('filterChips').onclick = (e) => {
+  const b = e.target.closest('.f-chip');
+  if (!b) return;
+  filterCat = (b.dataset.val === '全部') ? null : b.dataset.val;
+  syncFilterChips();
+  render();
+};
+
+/* ---------- 首页大数字下钻 ----------
+   点 hero 区任意位置切到统计页。统计页里饼图、日柱、月柱都是现成的，
+   这一步只是把「从首页到构成分析」的路径从两次点击缩成一次。 */
+$('heroCard').addEventListener('click', () => setView('stats'));
+
+/* ---------- 键盘快捷键（桌面端） ----------
+   只在没聚焦输入框、没开弹层时生效，避免干扰正常输入。
+   N = 记一笔，/ = 聚焦搜索。 */
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if ($('mask').classList.contains('on') || $('delMask').classList.contains('on')) return;
+  if (e.key === '/') {
+    e.preventDefault();
+    setView('list');
+    $('searchInput').focus();
+  } else if (e.key === 'n' || e.key === 'N') {
+    e.preventDefault();
+    openSheet();
+  }
+});
+
+/* ================= 导出 CSV =================
+   数据所有权：账是自己的，得能整包带走。纯前端生成，不依赖后端。
+   带 BOM 头，Excel 直接双击打开不乱码；字段全用双引号包裹防逗号注入。 */
+function exportCsv() {
+  const rows = liveRecords();
+  if (!rows.length) { toast('还没有记录可导出', true); return; }
+  const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const head = ['id', '类型', '金额', '分类', '时间', '备注', '支付方式'];
+  const lines = [head.join(',')].concat(rows.map(r => [
+    r.id,
+    r.type === 'income' ? '收入' : '支出',
+    (r.amount === null || r.amount === undefined) ? '' : r.amount,
+    r.category || '',
+    r.occurred_at || '',
+    r.note || '',
+    r.account || '',
+  ].map(cell).join(',')));
+  const p = bjParts(Date.now());
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '账本_' + p.y + pad(p.m + 1) + pad(p.d) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(dataTruncated
+    ? '已导出 ' + rows.length + ' 条（本次加载被截断，可能不是全部）'
+    : '已导出 ' + rows.length + ' 条记录');
+}
+$('exportBtn').onclick = exportCsv;
+
+/* ================= 轻提示 ================= */
+function toast(msg, isError) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', !!isError);
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+/* ================= 事件：配置页 ================= */
+$('cfgSave').onclick = async () => {
+  const apiUrl = $('cfgApi').value.trim();
+  const token = $('cfgToken').value.trim();
+  if (!apiUrl || !token) { showSetup('两项都要填', true); return; }
+  /* 存之前先校验来源合法性，别把非法协议写进 localStorage */
+  if (!isValidApiUrl(apiUrl)) {
+    showSetup('API 地址要以 http:// 或 https:// 开头', true);
+    return;
+  }
+  /* 预算：填了就必须是大于 0 的数字；想清掉预算就留空 */
+  const bRaw = $('cfgBudget').value.trim();
+  let budget = null;
+  if (bRaw) {
+    const n = Number(bRaw);
+    if (!Number.isFinite(n) || n <= 0) {
+      showSetup('预算要是大于 0 的数字，不想要了就留空', true);
+      return;
+    }
+    budget = n;
+  }
+  const btn = $('cfgSave');
+  btn.disabled = true;
+  btn.textContent = '连接中…';
+  cfg = { api: apiUrl, token: token, budget: budget };
+  saveCfg(cfg);
+  try {
+    await load();
+    showMain();
+    toast('已连接账本');
+  } catch (e) {
+    showSetup('连不上：' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '保存并加载';
+  }
+};
+
+$('setupBack').onclick = async () => {
+  try {
+    await load();
+    showMain();
+  } catch (e) {
+    showSetup('还是连不上：' + e.message, true);
+  }
+};
+
+/* Token 打码开关。默认打码（防肩窥/录屏），点一下可以看明文核对。 */
+$('cfgTokenEye').onclick = () => {
+  const input = $('cfgToken');
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  $('cfgTokenEye').textContent = show ? '隐藏' : '显示';
+  $('cfgTokenEye').setAttribute('aria-label', show ? '隐藏 Token' : '显示 Token');
+};
+
+/* ================= 事件：主页 ================= */
+$('refresh').onclick = () => load().catch(() => {});
+$('resetting').onclick = () => showSetup('修改后重新保存');
+
+/* 导航：滚动后显示毛玻璃与标题 */
+const navEl = $('nav');
+addEventListener('scroll', () => {
+  navEl.classList.toggle('scrolled', window.scrollY > 28);
+}, { passive: true });
+
+/* ================= 事件：记一笔 ================= */
+/* 账本统一按北京时间。设备时区不是东八区时（出差、系统时区设错），
+   直接 getHours() 取的是设备本地小时 —— 后端存的 20:30 在东京会显示成 21:30，
+   一存回去就凭空多一小时，来回编辑一次漂一点。
+   所以这里一律先换算成北京时间再取各个字段，跟设备时区彻底解耦。 */
+const BJ_OFFSET = 8 * 3600 * 1000;
+
+/** 取某个时间点的「北京时间」各字段。返回 UTC 方法读出的值 —— 因为
+    我们已经手动加了 8 小时偏移，再用 UTC 方法读出来的就是北京时间。 */
+function bjParts(v) {
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return null;
+  const b = new Date(d.getTime() + BJ_OFFSET);
+  return {
+    y: b.getUTCFullYear(), m: b.getUTCMonth(), d: b.getUTCDate(),
+    h: b.getUTCHours(), mi: b.getUTCMinutes(),
+  };
+}
+
+function nowLocal() {
+  const p = bjParts(Date.now());
+  return p.y + '-' + pad(p.m + 1) + '-' + pad(p.d) + 'T' + pad(p.h) + ':' + pad(p.mi);
+}
+
+function toLocalInput(d) {
+  const p = bjParts(d);
+  if (!p) return '';
+  return p.y + '-' + pad(p.m + 1) + '-' + pad(p.d) + 'T' + pad(p.h) + ':' + pad(p.mi);
+}
+
+function syncFormMode(opts) {
+  const inc = formType === 'income';
+  const keepValue = !!(opts && opts.keepValue);
+  $('addSheet').classList.toggle('income', inc);
+  $('accountLabel').textContent = inc ? '到账方式' : '支付方式';
+  $('catLabel').textContent = inc ? '收入类型' : '分类';
+
+  const catOpts = inc ? CAT_INCOME : CAT_EXPENSE;
+  const acctOpts = inc ? ACCOUNTS_INCOME : ACCOUNTS_EXPENSE;
+
+  /* keepValue = 打开编辑既有记录：原值一律保留，哪怕不在选项集里
+     （AI 可能给过「午餐」这种值，得原样带回去，不然一编辑就丢了）。
+     否则 = 用户手动切类型：旧值不在新选项集里就该清掉 ——
+     「餐饮」对收入类型毫无意义，留着只会让自定义框莫名其妙弹出来还带旧值。 */
+  if (!keepValue) {
+    dropIfAbsent('cat', catOpts);
+    dropIfAbsent('acct', acctOpts);
+  }
+
+  collapseCustom('cat');
+  collapseCustom('acct');
+  buildChips('cat', catOpts);
+  buildChips('acct', acctOpts);
+}
+
+/** 值不在选项集里就清空（仅在用户切类型时调用） */
+function dropIfAbsent(kind, options) {
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+  const cur = (hidden.value || '').trim();
+  if (cur && !options.some(o => o.v === cur)) hidden.value = '';
+}
+
+/* ================= 芯片选择器 =================
+   一对「分类」「支付方式」共用一个实现：
+     buildChips 铺选项，setChipValue 设值，readChip 取值。
+   值都落在隐藏 input 里，提交时读法跟原来完全一致，改动面最小。 */
+
+/** 铺芯片行。rawValue（当前值）不在选项里时会自动切到「自定义」态 */
+function buildChips(kind, options) {
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+  const cur = (hidden.value || '').trim();
+
+  box.innerHTML = options.map(o =>
+    '<button type="button" class="chip' + (o.v === cur ? ' on' : '') + '" data-val="' + esc(o.v) + '"' +
+      ' aria-pressed="' + (o.v === cur ? 'true' : 'false') + '">' +
+      (o.dot ? '<i class="dot-c" style="background:' + o.dot + '"></i>' : '') +
+      esc(o.v) +
+    '</button>'
+  ).join('');
+
+  /* 当前值不在预设里（AI 记的「午餐」，或手输的旧值）→ 亮起自定义并回填，
+     这样编辑老记录不会悄无声息地把分类弄丢 */
+  if (cur && !options.some(o => o.v === cur)) {
+    openCustom(kind, cur);
+  }
+}
+
+function setChipValue(kind, val) {
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+  hidden.value = val || '';
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  [...box.children].forEach(b => {
+    const on = b.dataset.val === val;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
+function readChip(kind) {
+  return ($(kind === 'cat' ? 'fCategory' : 'fAccount').value || '').trim();
+}
+
+function openCustom(kind, val) {
+  const wrap = $(kind === 'cat' ? 'catCustom' : 'acctCustom');
+  const input = $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput');
+  const btn = $(kind === 'cat' ? 'catCustomBtn' : 'acctCustomBtn');
+  wrap.hidden = false;
+  if (val !== undefined) input.value = val;
+  btn.textContent = '收起';
+  /* 自定义态下，预设芯片全部取消高亮 —— 避免「看着选的是餐饮、实际存的是午餐」 */
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  [...box.children].forEach(b => {
+    b.classList.remove('on');
+    b.setAttribute('aria-pressed', 'false');
+  });
+}
+
+function collapseCustom(kind) {
+  const wrap = $(kind === 'cat' ? 'catCustom' : 'acctCustom');
+  const input = $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput');
+  const btn = $(kind === 'cat' ? 'catCustomBtn' : 'acctCustomBtn');
+  wrap.hidden = true;
+  input.value = '';
+  btn.textContent = '自定义…';
+}
+
+/** 点芯片：选中并写入隐藏值；点同一项可取消选中 */
+function bindChips(kind) {
+  const box = $(kind === 'cat' ? 'catChips' : 'acctChips');
+  const hidden = $(kind === 'cat' ? 'fCategory' : 'fAccount');
+
+  box.onclick = (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const val = chip.dataset.val;
+    /* 再点一下取消，方便「本来就没打算填」的情况 */
+    const next = hidden.value === val ? '' : val;
+    hidden.value = next;
+    [...box.children].forEach(b => {
+      const on = b.dataset.val === next;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    /* 手选预设项后把自定义收起来，否则输入框和芯片会对不上 */
+    if (next) collapseCustom(kind);
+  };
+
+  const customBtn = $(kind === 'cat' ? 'catCustomBtn' : 'acctCustomBtn');
+  const customWrap = $(kind === 'cat' ? 'catCustom' : 'acctCustom');
+  customBtn.onclick = () => {
+    if (customWrap.hidden) {
+      openCustom(kind, hidden.value || '');
+      $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput').focus();
+    } else {
+      collapseCustom(kind);
+    }
+  };
+
+  const ok = $(kind === 'cat' ? 'catCustomOk' : 'acctCustomOk');
+  const input = $(kind === 'cat' ? 'catCustomInput' : 'acctCustomInput');
+  const commit = () => {
+    /* 长度上限只在这里管一次，不依赖 HTML 的 maxlength，
+       免得哪天 maxlength 被去掉、校验就悄悄没了 */
+    const raw = input.value.trim();
+    const v = raw.slice(0, 10);
+    if (!v) { toast('请输入内容', true); return; }
+    if (raw.length > 10) toast('最多 10 个字，已截断');
+    hidden.value = v;
+    [...box.children].forEach(b => {
+      b.classList.remove('on');
+      b.setAttribute('aria-pressed', 'false');
+    });
+    if (!window.__suppressChipToast) toast('已选：' + v);
+  };
+  ok.onclick = () => { commit(); input.blur(); };
+  input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } };
+}
+
+bindChips('cat');
+bindChips('acct');
+/* 脚本一加载就把默认（支出）的芯片铺好，别等到开抽屉才生成 ——
+   万一 init 提前 return，抽屉里也不会是一片空白 */
+buildChips('cat', CAT_EXPENSE);
+buildChips('acct', ACCOUNTS_EXPENSE);
+/* 筛选芯片跟数据无关（固定口径），脚本加载时铺一次就够 */
+buildFilterChips();
+
+/* 任一弹层打开时锁定页面滚动 */
+function syncScrollLock() {
+  document.body.style.overflow =
+    ($('mask').classList.contains('on') || $('delMask').classList.contains('on')) ? 'hidden' : '';
+}
+
+/* rec 传记录 = 编辑模式并预填；不传 = 新增 */
+function openSheet(rec) {
+  editingId = rec ? rec.id : null;
+  $('sheetTitle').textContent = rec ? '编辑记录' : '记一笔';
+  $('delEntry').hidden = !rec;
+  formType = (rec && rec.type === 'income') ? 'income' : 'expense';
+  [...$('typeSeg').children].forEach(b => b.classList.toggle('on', b.dataset.type === formType));
+
+  /* 先把值写进隐藏 input，再让 syncFormMode 按新类型铺芯片 ——
+     顺序反了的话，芯片铺完会被这里的赋值清掉高亮。
+     keepValue 让原值无论如何都留住（哪怕不在预设里）。 */
+  $('fCategory').value = rec ? (rec.category || '') : '';
+  $('fAccount').value = rec ? (rec.account || '') : '';
+  syncFormMode({ keepValue: true });
+
+  /* amount 可能是 null（AI 没识别出金额），直接塞会给输入框显示 "null" */
+  $('fAmount').value = (rec && rec.amount !== null && rec.amount !== undefined) ? rec.amount : '';
+  $('fNote').value = rec ? (rec.note || '') : '';
+  const rd = rec ? new Date(rec.occurred_at) : null;
+  $('fTime').value = (rd && !isNaN(rd.getTime())) ? toLocalInput(rd) : nowLocal();
+  $('formMsg').textContent = '';
+  $('formMsg').className = 'msg';
+  $('mask').classList.add('on');
+  syncScrollLock();
+  if (matchMedia('(pointer: fine)').matches) setTimeout(() => $('fAmount').focus(), 350);
+}
+
+/* 日期快捷：只改日期，保留原有的时分 —— 用户多半只想换个日子。
+   全程按北京时间算：拿现在的北京日期 ± N 天，再套回原来的时分。
+   这里不碰 Date 对象的本地方法，免得设备时区一换就漂。 */
+function setQuickDate(offsetDays) {
+  const cur = $('fTime').value;
+  const base = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(cur) ? cur : nowLocal();
+  const hhmi = base.slice(11);                     // "HH:MM"
+  const np = bjParts(Date.now());
+  /* 用 UTC 构造「北京日期」再加天数，避开设备时区 */
+  const d = new Date(Date.UTC(np.y, np.m, np.d));
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  const day = d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+  $('fTime').value = day + 'T' + hhmi;
+}
+$('qToday').onclick = () => setQuickDate(0);
+$('qYesterday').onclick = () => setQuickDate(-1);
+
+function closeSheet() {
+  $('mask').classList.remove('on');
+  syncScrollLock();
+}
+
+$('fab').onclick = () => openSheet();
+$('cancel').onclick = closeSheet;
+$('mask').onclick = (e) => { if (e.target === $('mask')) closeSheet(); };
+
+$('typeSeg').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  /* 点的是当前已选中的类型就什么也不做 —— 否则会触发 syncFormMode
+     把用户刚填的分类/支付方式清掉（因为旧值不在同一个选项集里） */
+  if (b.dataset.type === formType) return;
+  formType = b.dataset.type;
+  [...$('typeSeg').children].forEach(x => x.classList.toggle('on', x === b));
+  /* 真正切类型：不传 keepValue，旧值不在新选项集里就清掉 */
+  syncFormMode();
+};
+
+/* 更新记录：优先尝试 PUT；接口不支持时退回「先建新、再删旧」，避免把数据改丢 */
+async function saveEdit(payload) {
+  const q = '/api/records?id=' + encodeURIComponent(editingId);
+  try {
+    await api(q, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  } catch (e) {
+    if (e.status !== 404 && e.status !== 405) throw e;
+    const created = await api('/api/records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    try {
+      await api(q, { method: 'DELETE' });
+    } catch (e2) {
+      /* 旧记录没删掉。最坏的情况是列表里短暂出现两条一模一样的数据。
+         与其让用户自己去认哪条是旧的，不如在前端把旧 id 标记出来：
+         列表渲染时直接跳过它，等下次刷新回到服务端真实状态。 */
+      droppedIds.add(editingId);
+      if (created && created.id != null) droppedIds.delete(created.id);
+      const err = new Error('修改已保存，但旧记录删除失败，已在页面隐藏重复项');
+      err.partial = true;
+      throw err;
+    }
+  }
+}
+
+$('save').onclick = async () => {
+  /* 上一次校验留下的红字要先擦掉：不然这次改对了、点了保存，
+     屏幕上还挂着上一轮的「金额太大了」，看着像是又报了一次错。 */
+  $('formMsg').textContent = '';
+  $('formMsg').className = 'msg';
+
+  const amount = $('fAmount').value.trim();
+  if (!amount) { $('formMsg').textContent = '请输入金额'; $('formMsg').className = 'msg error'; return; }
+
+  /* 金额校验。原来只挡了「不是数字」和「负数」，于是这几种都能溜进去：
+       0        —— 记一笔 0 元的账没有任何意义，多半是手滑
+       0.001    —— 三位小数，存进去后显示成 ¥0.00，但统计里是真按 0.001 累加的
+       1e+100   —— 科学计数法，统计直接变 Infinity
+     正则卡死格式：整数不带前导零、小数最多两位。顺手也挡掉了 "1e5"、"+"、空格。 */
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(amount)) {
+    $('formMsg').textContent = '金额只能填数字，最多两位小数';
+    $('formMsg').className = 'msg error';
+    return;
+  }
+  const amountNum = Number(amount);
+  if (!Number.isFinite(amountNum)) {
+    $('formMsg').textContent = '金额超出可处理范围';
+    $('formMsg').className = 'msg error';
+    return;
+  }
+  if (amountNum <= 0) {
+    $('formMsg').textContent = '金额要大于 0';
+    $('formMsg').className = 'msg error';
+    return;
+  }
+  /* 上限 1000 万。理论上没理由超，真超了更可能是识别错了
+     （比如把日期 20260917 认成金额），宁可拦住让人自己确认一下。 */
+  if (amountNum > 10000000) {
+    $('formMsg').textContent = '金额太大了，请确认是否填错';
+    $('formMsg').className = 'msg error';
+    return;
+  }
+
+  const tVal = $('fTime').value;
+  /* datetime-local 给的是「不带时区的本地时间」字符串，形如 2026-09-17T20:30。
+     账本约定全按北京时间，所以直接把它当北京时间拼上 +08:00 就行 ——
+     不要先 new Date() 再取 getHours()：那个取的是设备本地小时，
+     出差换了时区，同一笔记录会被读出不同的时间。 */
+  const occurred = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(tVal) ? tVal + ':00+08:00' : null;
+  $('save').disabled = true;
+  try {
+    const payload = {
+      /* formType 只可能是 expense/income，但这是从按钮 dataset 来的，
+         兜一道 —— 前端校验不能替代「不信任自己」 */
+      type: formType === 'income' ? 'income' : 'expense',
+      amount: amountNum,
+      /* 分类和支付方式允许为空：AI 有时认不出，与其瞎猜一个，
+         不如留空等用户自己补。后端也允许 null。 */
+      category: readChip('cat') || null,
+      note: $('fNote').value.trim() || null,
+      account: readChip('acct') || null,
+    };
+    if (occurred) payload.occurred_at = occurred;
+    if (editingId) {
+      await saveEdit(payload);
+      closeSheet();
+      /* 本地原地替换，不重拉全量。id 没变，改的就是这几个字段。
+         occurred_at 用发出去的原串 —— 它和服务端存的是同一个时刻的等价表示，
+         不必等回包。payload 里没带 occurred_at（时间框非法）就保留本地原值。 */
+      const prev = records.find(r => String(r.id) === String(editingId));
+      const patch = Object.assign({}, payload);
+      patch.occurred_at = occurred || (prev && prev.occurred_at);
+      const okLocal = replaceLocal(editingId, patch);
+      /* 本地没有这条（可能别的设备删了）。不能凭空虚塞，回退重拉对齐真相。 */
+      if (!okLocal) await load({ silent: true });
+      else render();
+      toast('已更新');
+    } else {
+      const created = await api('/api/records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      closeSheet();
+      /* 后端返回了新建记录的 id，本地插一条就够，不用把整张表重拉一遍。
+         时间没给的话（occurred 为空）服务端会用「当前北京时间」，
+         本地也按同样规则补上，格式跟 payload 里那条保持一致
+         （nowLocal() 给的就是 'YYYY-MM-DDTHH:MM'，拼上 +08:00 即等价形式），
+         免得这条在本地排到最后去。 */
+      const rec = insertLocal(Object.assign({}, payload, {
+        id: created && created.id,
+        occurred_at: occurred || (nowLocal() + ':00+08:00'),
+      }));
+      /* 拿不到 id 就没法在本地安放这条记录（列表靠 id 定位、删除也要 id），
+         老实回退重拉，别硬塞一条没有 id 的假记录进列表。 */
+      if (!rec) await load({ silent: true });
+      else render();
+      /* 跨月要说清楚：首页只汇总本月，不然用户看金额没变会以为没记上。
+         比较也按北京时间 —— 判断的是「是不是这个月」，不是「设备认为现在是几月」 */
+      const op = occurred ? bjParts(occurred) : null;
+      const np2 = bjParts(Date.now());
+      if (op && (op.y !== np2.y || op.m !== np2.m)) {
+        toast('已记入 ' + (op.m + 1) + '月' + op.d + '日（非本月，首页汇总不变）');
+      } else {
+        toast('已保存');
+      }
+    }
+  } catch (e) {
+    if (e.partial) {
+      closeSheet();
+      /* 这条是「先建后删」只成功了一半，本地状态是脏的，必须重拉；
+         但屏幕上还有旧内容，仍然静默刷新，不要闪。 */
+      await load({ silent: true });
+      toast(e.message, true);
+    } else {
+      $('formMsg').textContent = (editingId ? '更新失败：' : '保存失败：') + e.message;
+      $('formMsg').className = 'msg error';
+    }
+  } finally {
+    $('save').disabled = false;
+  }
+};
+
+/* ================= 事件：删除（点记录弹出确认） ================= */
+function openDel(id) {
+  /* 把要删的东西写清楚 —— 只写「这条记录」的话，点错行时根本不知道删的是哪笔 */
+  const rec = records.find(r => String(r.id) === String(id));
+  /* 找不到就别开弹层。原来这里会「安静地什么都发生」，
+     用户点了删除却毫无反应，只会以为是页面卡了然后反复点。
+     能走到这儿说明本地列表和实际状态已经不一致了，让用户刷新。 */
+  if (!rec) {
+    toast('这条记录已经不在了，刷新一下再看看', true);
+    return;
+  }
+  pendingDeleteId = rec.id;
+  const box = $('delDetail');
+  const ic = iconFor(rec);
+  const isExp = rec.type !== 'income';
+  const bits = [];
+  if (rec.note) bits.push(rec.note);
+  if (rec.account) bits.push(rec.account);
+  const p = bjParts(rec.occurred_at);
+  if (p) bits.push((p.m + 1) + '月' + p.d + '日');
+  box.innerHTML =
+    '<div class="ad-ic" style="color:' + ic.c + ';background:' + ic.c + '1E">' + ic.s + '</div>' +
+    '<div>' +
+      '<div class="ad-t">' + esc(rec.category || (isExp ? '支出' : '收入')) +
+        ' ' + (isExp ? '−' : '+') + money(rec.amount) + '</div>' +
+      (bits.length ? '<div class="ad-s">' + esc(bits.join(' · ')) + '</div>' : '') +
+    '</div>';
+  box.hidden = false;
+  $('delMask').classList.add('on');
+  syncScrollLock();
+}
+
+function closeDel() {
+  $('delMask').classList.remove('on');
+  syncScrollLock();
+  pendingDeleteId = null;
+}
+
+$('delEntry').onclick = () => { if (editingId != null) openDel(editingId); };
+
+$('list').onclick = (e) => {
+  const it = e.target.closest('.item');
+  if (!it || !it.dataset.id) return;
+  const rec = records.find(r => String(r.id) === String(it.dataset.id));
+  if (rec) openSheet(rec);
+};
+$('list').onkeydown = (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const it = e.target.closest('.item');
+  if (!it || !it.dataset.id) return;
+  e.preventDefault();
+  const rec = records.find(r => String(r.id) === String(it.dataset.id));
+  if (rec) openSheet(rec);
+};
+$('delCancel').onclick = closeDel;
+$('delMask').onclick = (e) => { if (e.target === $('delMask')) closeDel(); };
+
+$('delConfirm').onclick = async () => {
+  const id = pendingDeleteId;
+  if (!id) return;
+  $('delConfirm').disabled = true;
+  try {
+    await api('/api/records?id=' + encodeURIComponent(id), { method: 'DELETE' });
+
+    /* 删完不再整表重拉。
+       原来是 await load()，而 load() 会把全部记录重新拉一遍 —— 记录多了就是
+       好几次往返，一次删一条等两三秒，观感像卡死。
+       但删除成功后这条记录一定不在了，从本地数组摘掉再渲染一次就够，
+       一次网络都不用，数字（本月支出等汇总本来就是本地算的）当场就对。
+
+       唯一的风险：后端返回了 200 却没真删。不赌这个 —— 下面的 catch 里
+       会退回去重拉一次，把本地状态拉回真相。 */
+    closeDel();
+    closeSheet();
+
+    const i = records.findIndex(r => String(r.id) === String(id));
+    if (i >= 0) records.splice(i, 1);
+    /* 这条已经删了，本地隐藏标记里留着它就是死数据，顺手清掉 */
+    droppedIds.delete(id);
+    render();
+    toast('已删除');
+  } catch (err) {
+    closeDel();
+    toast('删除失败：' + err.message, true);
+    /* 失败时不知道服务端到底删没删（可能是超时，其实删成功了；也可能是
+       接口报错，根本没删）。本地摘掉是「假设成功」，这里不能猜，
+       老老实实重拉一次，让界面反映真实状态。这时切骨架屏反而是对的 ——
+       它表示「我在重新确认」。 */
+    load().catch(() => {});
+  } finally {
+    $('delConfirm').disabled = false;
+  }
+};
+
+/* ================= 启动 ================= */
+
+/* PWA：注册 Service Worker。
+   - 必须在 https（或 localhost）下才可用，file:// 打开时直接跳过；
+   - 注册失败只意味着没有离线能力，记账本身不受影响，所以吞掉错误别打扰用户。 */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+(async function init() {
+  cfg = loadCfg();
+  /* 落盘过的配置也要过一次校验：早期版本（或手动改过 localStorage）可能
+     存着 javascript: 之类的地址，不能因为「它在本地」就当它可信 */
+  if (cfg && !isValidApiUrl(cfg.api)) {
+    localStorage.removeItem(LS_KEY);
+    cfg = null;
+    showSetup('本地保存的地址不合法，请重新填写', true);
+    return;
+  }
+  if (!cfg || !cfg.api || !cfg.token) { showSetup(''); return; }
+  try {
+    await load();
+    showMain();
+  } catch (e) {
+    showSetup('连不上：' + e.message, true);
+  }
+})();
+</script>
+</body>
+</html>
